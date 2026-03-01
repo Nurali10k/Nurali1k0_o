@@ -1,80 +1,119 @@
 local player = game.Players.LocalPlayer
-local runService = game:GetService("RunService")
-
 local screenGui = Instance.new("ScreenGui")
-screenGui.Name = "NuraliMenu"
+screenGui.Name = "NuraliCustomUI"
 screenGui.Parent = player:WaitForChild("PlayerGui")
 screenGui.ResetOnSpawn = false
 
+local speedValue = 50 
+
+local function applySpeed()
+    local character = player.Character or player.CharacterAdded:Wait()
+    local humanoid = character:WaitForChild("Humanoid")
+    humanoid.WalkSpeed = speedValue
+end
+
 local mainFrame = Instance.new("Frame")
-mainFrame.Size = UDim2.new(0, 200, 0, 300)
-mainFrame.Position = UDim2.new(0.5, -100, 0.5, -150)
-mainFrame.BackgroundColor3 = Color3.fromRGB(30, 30, 30)
+mainFrame.Size = UDim2.new(0, 250, 0, 150)
+mainFrame.Position = UDim2.new(0.5, -125, 0.5, -75)
+mainFrame.BackgroundTransparency = 1
 mainFrame.Active = true
 mainFrame.Draggable = true
 mainFrame.Parent = screenGui
 
-local title = Instance.new("TextLabel")
-title.Size = UDim2.new(1, 0, 0, 40)
-title.BackgroundColor3 = Color3.fromRGB(45, 45, 45)
-title.TextColor3 = Color3.fromRGB(255, 255, 255)
-title.Text = "Nurali1k0_o"
-title.TextSize = 18
-title.Font = Enum.Font.SourceSansBold
-title.Parent = mainFrame
+local closeBtn = Instance.new("TextButton")
+closeBtn.Size = UDim2.new(0, 40, 0, 40)
+closeBtn.BackgroundColor3 = Color3.fromRGB(220, 50, 50)
+closeBtn.Text = "X"
+closeBtn.TextColor3 = Color3.new(1,1,1)
+closeBtn.TextSize = 20
+closeBtn.Parent = mainFrame
+closeBtn.MouseButton1Click:Connect(function() screenGui:Destroy() end)
 
-local isNoclip = false
-local flySpeed = 50
+local hideBtn = Instance.new("TextButton")
+hideBtn.Size = UDim2.new(0, 60, 0, 40)
+hideBtn.Position = UDim2.new(0, 45, 0, 0)
+hideBtn.BackgroundColor3 = Color3.fromRGB(0, 120, 255)
+hideBtn.Text = "-"
+hideBtn.TextColor3 = Color3.new(1,1,1)
+hideBtn.TextSize = 30
+hideBtn.Parent = mainFrame
 
-local function createBtn(text, pos, color)
-    local btn = Instance.new("TextButton")
-    btn.Size = UDim2.new(0.9, 0, 0, 35)
-    btn.Position = UDim2.new(0.05, 0, 0, pos)
-    btn.BackgroundColor3 = color or Color3.fromRGB(60, 60, 60)
-    btn.TextColor3 = Color3.fromRGB(255, 255, 255)
-    btn.Text = text
-    btn.Parent = mainFrame
-    return btn
-end
+local nameTag = Instance.new("TextLabel")
+nameTag.Size = UDim2.new(0, 130, 0, 30)
+nameTag.Position = UDim2.new(0, 0, 0, 45)
+nameTag.BackgroundColor3 = Color3.fromRGB(0, 120, 255)
+nameTag.Text = "Nurali1k0_o"
+nameTag.TextColor3 = Color3.new(1,1,1)
+nameTag.Parent = mainFrame
 
-local noclipBtn = createBtn("Noclip: OFF", 50)
-local speedUp = createBtn("Speed +", 95)
-local speedDown = createBtn("Speed -", 140)
-local upBtn = createBtn("Вверх ▲", 185, Color3.fromRGB(80, 80, 80))
-local downBtn = createBtn("Вниз ▼", 230, Color3.fromRGB(80, 80, 80))
+local versionTag = Instance.new("TextLabel")
+versionTag.Size = UDim2.new(0, 80, 0, 30)
+versionTag.Position = UDim2.new(0, 135, 0, 45)
+versionTag.BackgroundColor3 = Color3.fromRGB(20, 100, 20)
+versionTag.Text = "V1"
+versionTag.TextColor3 = Color3.new(1,1,1)
+versionTag.Parent = mainFrame
 
-noclipBtn.MouseButton1Click:Connect(function()
-    isNoclip = not isNoclip
-    noclipBtn.Text = isNoclip and "Noclip: ON" or "Noclip: OFF"
-    noclipBtn.BackgroundColor3 = isNoclip and Color3.fromRGB(0, 120, 0) or Color3.fromRGB(60, 60, 60)
+local speedDisplay = Instance.new("TextLabel")
+speedDisplay.Size = UDim2.new(0, 215, 0, 40)
+speedDisplay.Position = UDim2.new(0, 0, 0, 80)
+speedDisplay.BackgroundColor3 = Color3.fromRGB(220, 50, 50)
+speedDisplay.Text = "Скорость - " .. speedValue
+speedDisplay.TextColor3 = Color3.new(1,1,1)
+speedDisplay.TextSize = 20
+speedDisplay.Parent = mainFrame
+
+local descText = Instance.new("TextLabel")
+descText.Size = UDim2.new(0, 140, 0, 30)
+descText.Position = UDim2.new(0, 0, 0, 125)
+descText.BackgroundColor3 = Color3.new(1,1,1)
+descText.Text = "Изменения скорости."
+descText.TextColor3 = Color3.new(0,0,0)
+descText.TextScaled = true
+descText.Parent = mainFrame
+
+local minusBtn = Instance.new("TextButton")
+minusBtn.Size = UDim2.new(0, 45, 0, 30)
+minusBtn.Position = UDim2.new(0, 145, 0, 125)
+minusBtn.BackgroundColor3 = Color3.fromRGB(130, 50, 250)
+minusBtn.Text = "-"
+minusBtn.TextColor3 = Color3.new(1,1,1)
+minusBtn.Parent = mainFrame
+
+local plusBtn = Instance.new("TextButton")
+plusBtn.Size = UDim2.new(0, 45, 0, 30)
+plusBtn.Position = UDim2.new(0, 195, 0, 125)
+plusBtn.BackgroundColor3 = Color3.fromRGB(60, 60, 60)
+plusBtn.Text = "+"
+plusBtn.TextColor3 = Color3.new(1,1,1)
+plusBtn.Parent = mainFrame
+
+plusBtn.MouseButton1Click:Connect(function()
+    speedValue = speedValue + 10
+    speedDisplay.Text = "Скорость - " .. speedValue
+    applySpeed()
 end)
 
-runService.Stepped:Connect(function()
-    if isNoclip and player.Character then
-        for _, part in pairs(player.Character:GetDescendants()) do
-            if part:IsA("BasePart") then
-                part.CanCollide = false
-            end
-        end
-    end
+minusBtn.MouseButton1Click:Connect(function()
+    speedValue = math.max(0, speedValue - 10)
+    speedDisplay.Text = "Скорость - " .. speedValue
+    applySpeed()
 end)
 
-speedUp.MouseButton1Click:Connect(function()
-    flySpeed = flySpeed + 10
+hideBtn.MouseButton1Click:Connect(function()
+    local targetVisible = not speedDisplay.Visible
+    speedDisplay.Visible = targetVisible
+    descText.Visible = targetVisible
+    minusBtn.Visible = targetVisible
+    plusBtn.Visible = targetVisible
+    nameTag.Visible = targetVisible
+    versionTag.Visible = targetVisible
+    hideBtn.Text = targetVisible and "-" or "+"
 end)
 
-speedDown.MouseButton1Click:Connect(function()
-    flySpeed = math.max(10, flySpeed - 10)
+player.CharacterAdded:Connect(function()
+    task.wait(0.5)
+    applySpeed()
 end)
 
-upBtn.MouseButton1Click:Connect(function()
-    if player.Character and player.Character:FindFirstChild("HumanoidRootPart") then
-        player.Character.HumanoidRootPart.CFrame = player.Character.HumanoidRootPart.CFrame * CFrame.new(0, flySpeed/10, 0)
-    end
-end)
-
-downBtn.MouseButton1Click:Connect(function()
-    if player.Character and player.Character:FindFirstChild("HumanoidRootPart") then
-        player.Character.HumanoidRootPart.CFrame = player.Character.HumanoidRootPart.CFrame * CFrame.new(0, -flySpeed/10, 0)
-    end
-end)
+applySpeed()
