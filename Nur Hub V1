@@ -1,0 +1,148 @@
+local player = game.Players.LocalPlayer
+local char = player.Character or player.CharacterAdded:Wait()
+local root = char:WaitForChild("HumanoidRootPart")
+local sgui = game:GetService("StarterGui")
+local ts = game:GetService("TweenService")
+
+local screenGui = Instance.new("ScreenGui", player:WaitForChild("PlayerGui"))
+screenGui.Name = "NurHub_Final_V4"
+screenGui.ResetOnSpawn = false
+
+local myIcon = "rbxassetid://120698730348379"
+local bringAmount = 1
+local bringTarget = "Player"
+local autoWood, killAura, infJump = false, false, false
+
+local main = Instance.new("Frame", screenGui)
+main.Size = UDim2.new(0, 520, 0, 360)
+main.Position = UDim2.new(0.5, -260, 0.5, -180)
+main.BackgroundColor3 = Color3.fromRGB(15, 15, 15)
+main.Active, main.Draggable = true, true
+Instance.new("UICorner", main).CornerRadius = UDim.new(0, 10)
+
+local sideBar = Instance.new("Frame", main)
+sideBar.Size = UDim2.new(0, 130, 1, 0)
+sideBar.BackgroundColor3 = Color3.fromRGB(22, 22, 22)
+Instance.new("UICorner", sideBar)
+
+local userImage = Instance.new("ImageLabel", sideBar)
+userImage.Size = UDim2.new(0, 60, 0, 60)
+userImage.Position = UDim2.new(0.5, -30, 0, 15)
+userImage.BackgroundTransparency = 1
+userImage.Image = myIcon
+Instance.new("UICorner", userImage).CornerRadius = UDim.new(1, 0)
+
+local title = Instance.new("TextLabel", sideBar)
+title.Size = UDim2.new(1, 0, 0, 30)
+title.Position = UDim2.new(0, 0, 0, 80)
+title.Text = "NURHUB V1"
+title.TextColor3 = Color3.fromRGB(150, 0, 255)
+title.Font = "GothamBold"
+title.TextSize = 16
+title.BackgroundTransparency = 1
+
+local content = Instance.new("ScrollingFrame", main)
+content.Size = UDim2.new(1, -150, 1, -50)
+content.Position = UDim2.new(0, 140, 0, 40)
+content.BackgroundTransparency = 1
+content.CanvasSize = UDim2.new(0, 0, 2, 0)
+content.ScrollBarThickness = 2
+Instance.new("UIListLayout", content).Padding = UDim.new(0, 10)
+
+local function createToggle(text, callback)
+    local b = Instance.new("TextButton", content)
+    b.Size = UDim2.new(1, -10, 0, 40)
+    b.Text = text .. ": OFF"
+    b.BackgroundColor3 = Color3.fromRGB(35, 35, 35)
+    b.TextColor3 = Color3.new(1, 1, 1)
+    b.Font = "GothamBold"
+    Instance.new("UICorner", b)
+    local s = false
+    b.MouseButton1Click:Connect(function()
+        s = not s
+        b.Text = text .. (s and ": ON" or ": OFF")
+        b.BackgroundColor3 = s and Color3.fromRGB(150, 0, 255) or Color3.fromRGB(35, 35, 35)
+        callback(s)
+    end)
+end
+
+local function createInput(text, placeholder, callback)
+    local f = Instance.new("Frame", content)
+    f.Size = UDim2.new(1, -10, 0, 40)
+    f.BackgroundColor3 = Color3.fromRGB(30, 30, 30)
+    Instance.new("UICorner", f)
+    local l = Instance.new("TextLabel", f)
+    l.Size = UDim2.new(0.5, 0, 1, 0)
+    l.Position = UDim2.new(0, 10, 0, 0)
+    l.Text = text
+    l.TextColor3 = Color3.new(1, 1, 1)
+    l.TextXAlignment = "Left"
+    l.BackgroundTransparency = 1
+    local i = Instance.new("TextBox", f)
+    i.Size = UDim2.new(0.4, 0, 0.7, 0)
+    i.Position = UDim2.new(0.55, 0, 0.15, 0)
+    i.PlaceholderText = placeholder
+    i.BackgroundColor3 = Color3.fromRGB(50, 50, 50)
+    i.TextColor3 = Color3.new(1, 1, 1)
+    Instance.new("UICorner", i)
+    i.FocusLost:Connect(function() callback(i.Text) end)
+end
+
+createInput("Max Per Item:", "10", function(v) bringAmount = tonumber(v) or 1 end)
+createInput("Bring To:", "Player/Fire", function(v) bringTarget = v end)
+
+createToggle("Auto Wood", function(s)
+    autoWood = s
+    spawn(function()
+        while autoWood do
+            task.wait(0.3)
+            for _, v in pairs(workspace:GetDescendants()) do
+                if v:IsA("Model") and (v.Name:find("Tree") or v.Name:find("Wood")) then
+                    if (root.Position - v:GetModelCFrame().p).Magnitude < 20 then
+                        local t = char:FindFirstChildOfClass("Tool")
+                        if t then t:Activate() end
+                    end
+                end
+            end
+        end
+    end)
+end)
+
+createToggle("Kill Aura", function(s)
+    killAura = s
+    spawn(function()
+        while killAura do
+            task.wait(0.2)
+            for _, v in pairs(workspace:GetDescendants()) do
+                if v:IsA("Humanoid") and v.Parent.Name ~= player.Name and v.Health > 0 then
+                    local p = v.Parent:FindFirstChild("HumanoidRootPart")
+                    if p and (root.Position - p.Position).Magnitude < 20 then
+                        local t = char:FindFirstChildOfClass("Tool")
+                        if t then t:Activate() end
+                    end
+                end
+            end
+        end
+    end)
+end)
+
+createInput("WalkSpeed:", "16", function(v) char.Humanoid.WalkSpeed = tonumber(v) or 16 end)
+
+createToggle("Inf Jump", function(s) infJump = s end)
+game:GetService("UserInputService").JumpRequest:Connect(function()
+    if infJump then char.Humanoid:ChangeState("Jumping") end
+end)
+
+local close = Instance.new("TextButton", main)
+close.Size = UDim2.new(0, 30, 0, 30)
+close.Position = UDim2.new(1, -35, 0, 5)
+close.Text = "×"
+close.TextColor3 = Color3.new(1, 1, 1)
+close.TextSize = 30
+close.BackgroundTransparency = 1
+close.MouseButton1Click:Connect(function() screenGui:Destroy() end)
+
+sgui:SetCore("SendNotification", {Title = "NurHub V3 Loaded ✅", Text = "YouTube: Nural1k", Icon = myIcon, Duration = 5})
+task.delay(3, function()
+    sgui:SetCore("SendNotification", {Title = "Welcome, Nurali! 🗿", Text = "Удачного фарма!", Icon = myIcon, Duration = 5})
+end)
