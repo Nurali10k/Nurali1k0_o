@@ -5,115 +5,127 @@ screenGui.Parent = player:WaitForChild("PlayerGui")
 screenGui.ResetOnSpawn = false
 
 local speedValue = 50 
+local isFlying = false
+local flyPart, flyBG, flyBV, heartbeatConnection
 
 local function applySpeed()
     local character = player.Character or player.CharacterAdded:Wait()
-    local humanoid = character:WaitForChild("Humanoid")
-    humanoid.WalkSpeed = speedValue
+    local humanoid = character:FindFirstChildOfClass("Humanoid")
+    if humanoid then humanoid.WalkSpeed = speedValue end
 end
 
-local mainFrame = Instance.new("Frame")
-mainFrame.Size = UDim2.new(0, 250, 0, 150)
-mainFrame.Position = UDim2.new(0.5, -125, 0.5, -75)
+local function updateSpeedDisplay()
+    if screenGui:FindFirstChild("MainFrame") and screenGui.MainFrame:FindFirstChild("SpeedDisplay") then
+        screenGui.MainFrame.SpeedDisplay.Text = "Скорость - " .. speedValue
+    end
+end
+
+local function disableFly()
+    if not isFlying then return end
+    isFlying = false
+    if heartbeatConnection then heartbeatConnection:Disconnect() end
+    if flyBG then flyBG:Destroy(); flyBG = nil end
+    if flyBV then flyBV:Destroy(); flyBV = nil end
+    local character = player.Character
+    if character and character:FindFirstChildOfClass("Humanoid") then
+        character:FindFirstChildOfClass("Humanoid").PlatformStand = false
+    end
+    applySpeed()
+end
+
+local function enableFly()
+    if isFlying then return end
+    isFlying = true
+    local character = player.Character or player.CharacterAdded:Wait()
+    local humanoid = character:FindFirstChildOfClass("Humanoid")
+    flyPart = character:FindFirstChild("HumanoidRootPart")
+    if not flyPart or not humanoid then isFlying = false return end
+    humanoid.PlatformStand = true
+    flyBG = Instance.new("BodyGyro", flyPart)
+    flyBG.D = 10
+    flyBG.P = 2000
+    flyBG.MaxTorque = Vector3.new(1, 1, 1) * math.huge
+    flyBV = Instance.new("BodyVelocity", flyPart)
+    flyBV.MaxForce = Vector3.new(1, 1, 1) * math.huge
+    local camera = workspace.CurrentCamera
+    heartbeatConnection = game:GetService("RunService").Heartbeat:Connect(function()
+        if isFlying and flyPart and flyBG and flyBV then
+            flyBG.CFrame = camera.CFrame
+            flyBV.Velocity = camera.CFrame.lookVector * speedValue
+        end
+    end)
+end
+
+local mainFrame = Instance.new("Frame", screenGui)
+mainFrame.Name = "MainFrame"
+mainFrame.Size = UDim2.new(0, 250, 0, 195)
+mainFrame.Position = UDim2.new(0.5, -125, 0.5, -100)
 mainFrame.BackgroundTransparency = 1
 mainFrame.Active = true
 mainFrame.Draggable = true
-mainFrame.Parent = screenGui
 
-local closeBtn = Instance.new("TextButton")
+local closeBtn = Instance.new("TextButton", mainFrame)
 closeBtn.Size = UDim2.new(0, 40, 0, 40)
-closeBtn.BackgroundColor3 = Color3.fromRGB(220, 50, 50)
-closeBtn.Text = "X"
-closeBtn.TextColor3 = Color3.new(1,1,1)
-closeBtn.TextSize = 20
-closeBtn.Parent = mainFrame
-closeBtn.MouseButton1Click:Connect(function() screenGui:Destroy() end)
+closeBtn.BackgroundColor3 = Color3.fromRGB(220, 50, 50) 
+closeBtn.Text = "X"; closeBtn.TextColor3 = Color3.new(1,1,1)
+closeBtn.MouseButton1Click:Connect(function() screenGui:Destroy(); disableFly() end)
 
-local hideBtn = Instance.new("TextButton")
-hideBtn.Size = UDim2.new(0, 60, 0, 40)
-hideBtn.Position = UDim2.new(0, 45, 0, 0)
+local hideBtn = Instance.new("TextButton", mainFrame)
+hideBtn.Size = UDim2.new(0, 60, 0, 40); hideBtn.Position = UDim2.new(0, 45, 0, 0)
 hideBtn.BackgroundColor3 = Color3.fromRGB(0, 120, 255)
-hideBtn.Text = "-"
-hideBtn.TextColor3 = Color3.new(1,1,1)
-hideBtn.TextSize = 30
-hideBtn.Parent = mainFrame
+hideBtn.Text = "-"; hideBtn.TextColor3 = Color3.new(1,1,1); hideBtn.TextSize = 30
 
-local nameTag = Instance.new("TextLabel")
-nameTag.Size = UDim2.new(0, 130, 0, 30)
-nameTag.Position = UDim2.new(0, 0, 0, 45)
-nameTag.BackgroundColor3 = Color3.fromRGB(0, 120, 255)
-nameTag.Text = "Nurali1k0_o"
-nameTag.TextColor3 = Color3.new(1,1,1)
-nameTag.Parent = mainFrame
+local nameTag = Instance.new("TextLabel", mainFrame)
+nameTag.Size = UDim2.new(0, 130, 0, 30); nameTag.Position = UDim2.new(0, 0, 0, 45)
+nameTag.BackgroundColor3 = Color3.fromRGB(0, 120, 255); nameTag.Text = "Nurali1k0_o"; nameTag.TextColor3 = Color3.new(1,1,1)
 
-local versionTag = Instance.new("TextLabel")
-versionTag.Size = UDim2.new(0, 80, 0, 30)
-versionTag.Position = UDim2.new(0, 135, 0, 45)
-versionTag.BackgroundColor3 = Color3.fromRGB(20, 100, 20)
-versionTag.Text = "V1"
-versionTag.TextColor3 = Color3.new(1,1,1)
-versionTag.Parent = mainFrame
+local versionTag = Instance.new("TextLabel", mainFrame)
+versionTag.Size = UDim2.new(0, 80, 0, 30); versionTag.Position = UDim2.new(0, 135, 0, 45)
+versionTag.BackgroundColor3 = Color3.fromRGB(20, 100, 20); versionTag.Text = "V1"; versionTag.TextColor3 = Color3.new(1,1,1)
 
-local speedDisplay = Instance.new("TextLabel")
-speedDisplay.Size = UDim2.new(0, 215, 0, 40)
-speedDisplay.Position = UDim2.new(0, 0, 0, 80)
-speedDisplay.BackgroundColor3 = Color3.fromRGB(220, 50, 50)
-speedDisplay.Text = "Скорость - " .. speedValue
-speedDisplay.TextColor3 = Color3.new(1,1,1)
-speedDisplay.TextSize = 20
-speedDisplay.Parent = mainFrame
+local speedDisplay = Instance.new("TextLabel", mainFrame)
+speedDisplay.Name = "SpeedDisplay"; speedDisplay.Size = UDim2.new(0, 215, 0, 40); speedDisplay.Position = UDim2.new(0, 0, 0, 80)
+speedDisplay.BackgroundColor3 = Color3.fromRGB(220, 50, 50); speedDisplay.Text = "Скорость - " .. speedValue; speedDisplay.TextColor3 = Color3.new(1,1,1); speedDisplay.TextSize = 20
 
-local descText = Instance.new("TextLabel")
-descText.Size = UDim2.new(0, 140, 0, 30)
-descText.Position = UDim2.new(0, 0, 0, 125)
-descText.BackgroundColor3 = Color3.new(1,1,1)
-descText.Text = "Изменения скорости."
-descText.TextColor3 = Color3.new(0,0,0)
-descText.TextScaled = true
-descText.Parent = mainFrame
+local descText = Instance.new("TextLabel", mainFrame)
+descText.Size = UDim2.new(0, 140, 0, 30); descText.Position = UDim2.new(0, 0, 0, 125)
+descText.BackgroundColor3 = Color3.new(1,1,1); descText.Text = "Изменения скорости."; descText.TextScaled = true
 
-local minusBtn = Instance.new("TextButton")
-minusBtn.Size = UDim2.new(0, 45, 0, 30)
-minusBtn.Position = UDim2.new(0, 145, 0, 125)
-minusBtn.BackgroundColor3 = Color3.fromRGB(130, 50, 250)
-minusBtn.Text = "-"
-minusBtn.TextColor3 = Color3.new(1,1,1)
-minusBtn.Parent = mainFrame
+local minusBtn = Instance.new("TextButton", mainFrame)
+minusBtn.Size = UDim2.new(0, 45, 0, 30); minusBtn.Position = UDim2.new(0, 145, 0, 125)
+minusBtn.BackgroundColor3 = Color3.fromRGB(130, 50, 250); minusBtn.Text = "-"; minusBtn.TextColor3 = Color3.new(1,1,1)
+minusBtn.MouseButton1Click:Connect(function() speedValue = math.max(0, speedValue - 10); updateSpeedDisplay(); if not isFlying then applySpeed() end end)
 
-local plusBtn = Instance.new("TextButton")
-plusBtn.Size = UDim2.new(0, 45, 0, 30)
-plusBtn.Position = UDim2.new(0, 195, 0, 125)
-plusBtn.BackgroundColor3 = Color3.fromRGB(60, 60, 60)
-plusBtn.Text = "+"
-plusBtn.TextColor3 = Color3.new(1,1,1)
-plusBtn.Parent = mainFrame
+local plusBtn = Instance.new("TextButton", mainFrame)
+plusBtn.Size = UDim2.new(0, 45, 0, 30); plusBtn.Position = UDim2.new(0, 195, 0, 125)
+plusBtn.BackgroundColor3 = Color3.fromRGB(60, 60, 60); plusBtn.Text = "+"; plusBtn.TextColor3 = Color3.new(1,1,1)
+plusBtn.MouseButton1Click:Connect(function() speedValue = speedValue + 10; updateSpeedDisplay(); if not isFlying then applySpeed() end end)
 
-plusBtn.MouseButton1Click:Connect(function()
-    speedValue = speedValue + 10
-    speedDisplay.Text = "Скорость - " .. speedValue
-    applySpeed()
-end)
+local upBtn = Instance.new("TextButton", mainFrame)
+upBtn.Size = UDim2.new(0, 50, 0, 30); upBtn.Position = UDim2.new(0, 0, 0, 160)
+upBtn.BackgroundColor3 = Color3.fromRGB(255, 165, 0); upBtn.Text = "Up"; upBtn.TextColor3 = Color3.new(1,1,1)
+upBtn.MouseButton1Click:Connect(function() speedValue = speedValue + 5; updateSpeedDisplay(); if not isFlying then applySpeed() end end)
 
-minusBtn.MouseButton1Click:Connect(function()
-    speedValue = math.max(0, speedValue - 10)
-    speedDisplay.Text = "Скорость - " .. speedValue
-    applySpeed()
-end)
+local downBtn = Instance.new("TextButton", mainFrame)
+downBtn.Size = UDim2.new(0, 50, 0, 30); downBtn.Position = UDim2.new(0, 55, 0, 160)
+downBtn.BackgroundColor3 = Color3.fromRGB(255, 255, 0); downBtn.Text = "Down"; downBtn.TextColor3 = Color3.new(1,1,1)
+downBtn.MouseButton1Click:Connect(function() speedValue = math.max(0, speedValue - 5); updateSpeedDisplay(); if not isFlying then applySpeed() end end)
+
+local unflyBtn = Instance.new("TextButton", mainFrame)
+unflyBtn.Size = UDim2.new(0, 60, 0, 30); unflyBtn.Position = UDim2.new(0, 110, 0, 160)
+unflyBtn.BackgroundColor3 = Color3.fromRGB(40, 40, 40); unflyBtn.Text = "Unfly"; unflyBtn.TextColor3 = Color3.new(1,1,1)
+unflyBtn.MouseButton1Click:Connect(disableFly)
+
+local flyBtn = Instance.new("TextButton", mainFrame)
+flyBtn.Size = UDim2.new(0, 60, 0, 30); flyBtn.Position = UDim2.new(0, 175, 0, 160)
+flyBtn.BackgroundColor3 = Color3.fromRGB(60, 60, 60); flyBtn.Text = "Fly"; flyBtn.TextColor3 = Color3.new(1,1,1)
+flyBtn.MouseButton1Click:Connect(enableFly)
 
 hideBtn.MouseButton1Click:Connect(function()
-    local targetVisible = not speedDisplay.Visible
-    speedDisplay.Visible = targetVisible
-    descText.Visible = targetVisible
-    minusBtn.Visible = targetVisible
-    plusBtn.Visible = targetVisible
-    nameTag.Visible = targetVisible
-    versionTag.Visible = targetVisible
-    hideBtn.Text = targetVisible and "-" or "+"
+    local vis = not speedDisplay.Visible
+    for _, v in pairs({speedDisplay, descText, minusBtn, plusBtn, nameTag, versionTag, upBtn, downBtn, unflyBtn, flyBtn}) do v.Visible = vis end
+    hideBtn.Text = vis and "-" or "+"
 end)
 
-player.CharacterAdded:Connect(function()
-    task.wait(0.5)
-    applySpeed()
-end)
-
+player.CharacterAdded:Connect(function() task.wait(0.5); disableFly(); applySpeed() end)
 applySpeed()
