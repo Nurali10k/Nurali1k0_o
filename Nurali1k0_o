@@ -39,23 +39,32 @@ local function enableFly()
     local character = player.Character or player.CharacterAdded:Wait()
     local humanoid = character:FindFirstChildOfClass("Humanoid")
     flyPart = character:FindFirstChild("HumanoidRootPart")
+    
     if not flyPart or not humanoid then isFlying = false return end
+    
     humanoid.PlatformStand = true
+    
     flyBG = Instance.new("BodyGyro", flyPart)
     flyBG.D = 10
     flyBG.P = 2000
     flyBG.MaxTorque = Vector3.new(1, 1, 1) * math.huge
+    
     flyBV = Instance.new("BodyVelocity", flyPart)
     flyBV.MaxForce = Vector3.new(1, 1, 1) * math.huge
+    
     local camera = workspace.CurrentCamera
+    
     heartbeatConnection = game:GetService("RunService").Heartbeat:Connect(function()
-        if isFlying and flyPart and flyBG and flyBV then
+        if isFlying and flyPart and flyBG and flyBV and humanoid then
+            -- Поворачиваем персонажа за камерой, чтобы перед был всегда спереди
             flyBG.CFrame = camera.CFrame
-            flyBV.Velocity = camera.CFrame.lookVector * speedValue
+            -- Двигаемся по направлению джойстика (MoveDirection)
+            flyBV.Velocity = humanoid.MoveDirection * speedValue
         end
     end)
 end
 
+-- Создание интерфейса (оставил без изменений, как ты просил)
 local mainFrame = Instance.new("Frame", screenGui)
 mainFrame.Name = "MainFrame"
 mainFrame.Size = UDim2.new(0, 250, 0, 195)
