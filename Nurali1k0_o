@@ -1,0 +1,60 @@
+local player = game.Players.LocalPlayer
+local runService = game:GetService("RunService")
+local mouse = player:GetMouse()
+
+local screenGui = Instance.new("ScreenGui")
+screenGui.Name = "NuraliMenu"
+screenGui.Parent = player:WaitForChild("PlayerGui")
+screenGui.ResetOnSpawn = false
+
+local mainFrame = Instance.new("Frame")
+mainFrame.Size = UDim2.new(0, 200, 0, 300)
+mainFrame.Position = UDim2.new(0.5, -100, 0.5, -150)
+mainFrame.BackgroundColor3 = Color3.fromRGB(30, 30, 30)
+mainFrame.BorderSizePixel = 2
+mainFrame.Active = true
+mainFrame.Draggable = true
+mainFrame.Parent = screenGui
+
+local title = Instance.new("TextLabel")
+title.Size = UDim2.new(1, 0, 0, 40)
+title.BackgroundColor3 = Color3.fromRGB(45, 45, 45)
+title.TextColor3 = Color3.fromRGB(255, 255, 255)
+title.Text = "Nurali1k0_o"
+title.TextSize = 18
+title.Font = Enum.Font.SourceSansBold
+title.Parent = mainFrame
+
+local isNoclip = false
+local flySpeed = 50
+
+local function createBtn(text, pos, color)
+    local btn = Instance.new("TextButton")
+    btn.Size = UDim2.new(0.9, 0, 0, 35)
+    btn.Position = UDim2.new(0.05, 0, 0, pos)
+    btn.BackgroundColor3 = color or Color3.fromRGB(60, 60, 60)
+    btn.TextColor3 = Color3.fromRGB(255, 255, 255)
+    btn.Text = text
+    btn.Font = Enum.Font.SourceSans
+    btn.TextSize = 16
+    btn.Parent = mainFrame
+    return btn
+end
+
+local noclipBtn = createBtn("Noclip: OFF", 50)
+local speedUp = createBtn("Speed +", 95)
+local speedDown = createBtn("Speed -", 140)
+local upBtn = createBtn("Вверх ▲", 185, Color3.fromRGB(80, 80, 80))
+local downBtn = createBtn("Вниз ▼", 230, Color3.fromRGB(80, 80, 80))
+
+noclipBtn.MouseButton1Click:Connect(function()
+    isNoclip = not isNoclip
+    noclipBtn.Text = isNoclip and "Noclip: ON" or "Noclip: OFF"
+    noclipBtn.BackgroundColor3 = isNoclip and Color3.fromRGB(0, 120, 0) or Color3.fromRGB(60, 60, 60)
+end)
+
+runService.Stepped:Connect(function()
+    if isNoclip and player.Character then
+        for _, part in pairs(player.Character:GetDescendants()) do
+            if part:IsA("BasePart") then
+                part.Can
