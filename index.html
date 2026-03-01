@@ -1,1 +1,89 @@
+local player = game.Players.LocalPlayer
+local runService = game:GetService("RunService")
 
+-- 1. Создаем сам интерфейс (ScreenGui)
+local screenGui = Instance.new("ScreenGui")
+screenGui.Name = "NuraliMenu"
+screenGui.Parent = player:WaitForChild("PlayerGui")
+
+-- 2. Создаем главное окно (Frame), которое можно таскать
+local mainFrame = Instance.new("Frame")
+mainFrame.Size = UDim2.new(0, 220, 0, 280)
+mainFrame.Position = UDim2.new(0.5, -110, 0.5, -140)
+mainFrame.BackgroundColor3 = Color3.fromRGB(35, 35, 35)
+mainFrame.Active = true
+mainFrame.Draggable = true -- Позволяет перетаскивать окно мышкой!
+mainFrame.Parent = screenGui
+
+-- 3. Добавляем твой ник (Title)
+local title = Instance.new("TextLabel")
+title.Size = UDim2.new(1, 0, 0, 35)
+title.BackgroundColor3 = Color3.fromRGB(55, 55, 55)
+title.TextColor3 = Color3.fromRGB(255, 255, 255)
+title.TextScaled = true
+title.Text = "Nurali1k0_o"
+title.Parent = mainFrame
+
+-- Переменные для функций
+local isNoclip = false
+local flySpeed = 50
+
+-- Функция для создания кнопок (чтобы не писать один и тот же код много раз)
+local function createButton(text, yPos)
+    local btn = Instance.new("TextButton")
+    btn.Size = UDim2.new(0.9, 0, 0, 30)
+    btn.Position = UDim2.new(0.05, 0, 0, yPos)
+    btn.BackgroundColor3 = Color3.fromRGB(70, 70, 70)
+    btn.TextColor3 = Color3.fromRGB(255, 255, 255)
+    btn.Text = text
+    btn.Parent = mainFrame
+    return btn
+end
+
+-- 4. Создаем кнопки
+local btnFly = createButton("Fly: OFF", 45)
+local btnNoclip = createButton("Noclip: OFF", 85)
+local btnSpeedUp = createButton("Speed +", 125)
+local btnSpeedDown = createButton("Speed -", 165)
+local btnUp = createButton("Вверх (Up)", 205)
+local btnDown = createButton("Вниз (Down)", 245)
+
+-- 5. Логика для Noclip
+btnNoclip.MouseButton1Click:Connect(function()
+    isNoclip = not isNoclip
+    if isNoclip then
+        btnNoclip.Text = "Noclip: ON"
+        btnNoclip.BackgroundColor3 = Color3.fromRGB(0, 150, 0)
+    else
+        btnNoclip.Text = "Noclip: OFF"
+        btnNoclip.BackgroundColor3 = Color3.fromRGB(70, 70, 70)
+    end
+end)
+
+runService.Stepped:Connect(function()
+    if isNoclip and player.Character then
+        for _, part in pairs(player.Character:GetDescendants()) do
+            if part:IsA("BasePart") then
+                part.CanCollide = false
+            end
+        end
+    end
+end)
+
+-- 6. Логика скорости
+btnSpeedUp.MouseButton1Click:Connect(function()
+    flySpeed = flySpeed + 10
+    btnSpeedUp.Text = "Speed + (" .. flySpeed .. ")"
+end)
+
+btnSpeedDown.MouseButton1Click:Connect(function()
+    flySpeed = flySpeed - 10
+    if flySpeed < 10 then flySpeed = 10 end
+    btnSpeedDown.Text = "Speed - (" .. flySpeed .. ")"
+end)
+
+-- Пустышки для кнопок полета (здесь нужно будет добавить физику)
+btnFly.MouseButton1Click:Connect(function()
+    print("Fly кнопка нажата! Скорость:", flySpeed)
+end)
+      
