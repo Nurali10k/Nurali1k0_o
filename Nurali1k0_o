@@ -1,6 +1,5 @@
 local player = game.Players.LocalPlayer
 local runService = game:GetService("RunService")
-local mouse = player:GetMouse()
 
 local screenGui = Instance.new("ScreenGui")
 screenGui.Name = "NuraliMenu"
@@ -11,7 +10,6 @@ local mainFrame = Instance.new("Frame")
 mainFrame.Size = UDim2.new(0, 200, 0, 300)
 mainFrame.Position = UDim2.new(0.5, -100, 0.5, -150)
 mainFrame.BackgroundColor3 = Color3.fromRGB(30, 30, 30)
-mainFrame.BorderSizePixel = 2
 mainFrame.Active = true
 mainFrame.Draggable = true
 mainFrame.Parent = screenGui
@@ -35,8 +33,6 @@ local function createBtn(text, pos, color)
     btn.BackgroundColor3 = color or Color3.fromRGB(60, 60, 60)
     btn.TextColor3 = Color3.fromRGB(255, 255, 255)
     btn.Text = text
-    btn.Font = Enum.Font.SourceSans
-    btn.TextSize = 16
     btn.Parent = mainFrame
     return btn
 end
@@ -57,4 +53,28 @@ runService.Stepped:Connect(function()
     if isNoclip and player.Character then
         for _, part in pairs(player.Character:GetDescendants()) do
             if part:IsA("BasePart") then
-                part.Can
+                part.CanCollide = false
+            end
+        end
+    end
+end)
+
+speedUp.MouseButton1Click:Connect(function()
+    flySpeed = flySpeed + 10
+end)
+
+speedDown.MouseButton1Click:Connect(function()
+    flySpeed = math.max(10, flySpeed - 10)
+end)
+
+upBtn.MouseButton1Click:Connect(function()
+    if player.Character and player.Character:FindFirstChild("HumanoidRootPart") then
+        player.Character.HumanoidRootPart.CFrame = player.Character.HumanoidRootPart.CFrame * CFrame.new(0, flySpeed/10, 0)
+    end
+end)
+
+downBtn.MouseButton1Click:Connect(function()
+    if player.Character and player.Character:FindFirstChild("HumanoidRootPart") then
+        player.Character.HumanoidRootPart.CFrame = player.Character.HumanoidRootPart.CFrame * CFrame.new(0, -flySpeed/10, 0)
+    end
+end)
