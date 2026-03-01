@@ -1,140 +1,107 @@
 local player = game.Players.LocalPlayer
-local screenGui = Instance.new("ScreenGui")
-screenGui.Name = "NuraliCustomUI"
-screenGui.Parent = player:WaitForChild("PlayerGui")
+local runService = game:GetService("RunService")
+local screenGui = Instance.new("ScreenGui", player:WaitForChild("PlayerGui"))
+screenGui.Name = "NuraliUltraFly"
 screenGui.ResetOnSpawn = false
 
-local speedValue = 50 
+local speedValue = 2
 local isFlying = false
-local flyPart, flyBG, flyBV, heartbeatConnection
-
-local function applySpeed()
-    local character = player.Character or player.CharacterAdded:Wait()
-    local humanoid = character:FindFirstChildOfClass("Humanoid")
-    if humanoid then humanoid.WalkSpeed = speedValue end
-end
-
-local function updateSpeedDisplay()
-    if screenGui:FindFirstChild("MainFrame") and screenGui.MainFrame:FindFirstChild("SpeedDisplay") then
-        screenGui.MainFrame.SpeedDisplay.Text = "Скорость - " .. speedValue
-    end
-end
+local flyPart, flyBG, flyBV, hb, noclipConn
 
 local function disableFly()
     if not isFlying then return end
     isFlying = false
-    if heartbeatConnection then heartbeatConnection:Disconnect() end
-    if flyBG then flyBG:Destroy(); flyBG = nil end
-    if flyBV then flyBV:Destroy(); flyBV = nil end
-    local character = player.Character
-    if character and character:FindFirstChildOfClass("Humanoid") then
-        character:FindFirstChildOfClass("Humanoid").PlatformStand = false
+    if hb then hb:Disconnect() end
+    if noclipConn then noclipConn:Disconnect() end
+    if flyBG then flyBG:Destroy() end
+    if flyBV then flyBV:Destroy() end
+    local char = player.Character
+    if char and char:FindFirstChildOfClass("Humanoid") then
+        char:FindFirstChildOfClass("Humanoid").PlatformStand = false
+        for _, part in pairs(char:GetDescendants()) do
+            if part:IsA("BasePart") then part.CanCollide = true end
+        end
     end
-    applySpeed()
 end
 
 local function enableFly()
     if isFlying then return end
     isFlying = true
-    local character = player.Character or player.CharacterAdded:Wait()
-    local humanoid = character:FindFirstChildOfClass("Humanoid")
-    flyPart = character:FindFirstChild("HumanoidRootPart")
-    
-    if not flyPart or not humanoid then isFlying = false return end
-    
-    humanoid.PlatformStand = true
-    
+    local char = player.Character or player.CharacterAdded:Wait()
+    local hum = char:FindFirstChildOfClass("Humanoid")
+    flyPart = char:FindFirstChild("HumanoidRootPart")
+    if not flyPart or not hum then isFlying = false return end
+    hum.PlatformStand = true
     flyBG = Instance.new("BodyGyro", flyPart)
-    flyBG.D = 10
-    flyBG.P = 2000
+    flyBG.D, flyBG.P = 15, 3000
     flyBG.MaxTorque = Vector3.new(1, 1, 1) * math.huge
-    
     flyBV = Instance.new("BodyVelocity", flyPart)
     flyBV.MaxForce = Vector3.new(1, 1, 1) * math.huge
-    
-    local camera = workspace.CurrentCamera
-    
-    heartbeatConnection = game:GetService("RunService").Heartbeat:Connect(function()
-        if isFlying and flyPart and flyBG and flyBV and humanoid then
-            -- Поворачиваем персонажа за камерой, чтобы перед был всегда спереди
-            flyBG.CFrame = camera.CFrame
-            -- Двигаемся по направлению джойстика (MoveDirection)
-            flyBV.Velocity = humanoid.MoveDirection * speedValue
+    local cam = workspace.CurrentCamera
+    hb = runService.Heartbeat:Connect(function()
+        if isFlying and flyPart and flyBG and flyBV and hum then
+            flyBG.CFrame = cam.CFrame
+            if hum.MoveDirection.Magnitude > 0 then
+                local jitter = Vector3.new(math.random(-1,1)/100, 0, math.random(-1,1)/100)
+                flyBV.Velocity = (cam.CFrame.LookVector + jitter) * (speedValue * 60)
+            else
+                flyBV.Velocity = Vector3.new(0, 0.15, 0)
+            end
+        end
+    end)
+    noclipConn = runService.Stepped:Connect(function()
+        if isFlying then
+            for _, part in pairs(char:GetDescendants()) do
+                if part:IsA("BasePart") then part.CanCollide = false end
+            end
         end
     end)
 end
 
--- Создание интерфейса (оставил без изменений, как ты просил)
 local mainFrame = Instance.new("Frame", screenGui)
-mainFrame.Name = "MainFrame"
-mainFrame.Size = UDim2.new(0, 250, 0, 195)
-mainFrame.Position = UDim2.new(0.5, -125, 0.5, -100)
-mainFrame.BackgroundTransparency = 1
-mainFrame.Active = true
-mainFrame.Draggable = true
+mainFrame.Size, mainFrame.Position = UDim2.new(0, 200, 0, 120), UDim2.new(0.5, -100, 0.5, -60)
+mainFrame.BackgroundTransparency, mainFrame.Active, mainFrame.Draggable = 1, true, true
 
-local closeBtn = Instance.new("TextButton", mainFrame)
-closeBtn.Size = UDim2.new(0, 40, 0, 40)
-closeBtn.BackgroundColor3 = Color3.fromRGB(220, 50, 50) 
-closeBtn.Text = "X"; closeBtn.TextColor3 = Color3.new(1,1,1)
+local grid = Instance.new("UIGridLayout", mainFrame)
+grid.CellSize, grid.CellPadding = UDim2.new(0, 50, 0, 40), UDim2.new(0, 0, 0, 0)
+
+local function createBtn(text, color)
+    local b = Instance.new("TextButton", mainFrame)
+    b.Text, b.BackgroundColor3 = text, color
+    b.BorderSizePixel, b.BorderColor3 = 1, Color3.new(0,0,0)
+    b.TextColor3, b.Font, b.TextSize = Color3.new(0,0,0), "SourceSansBold", 16
+    return b
+end
+
+local closeBtn = createBtn("X", Color3.fromRGB(255, 0, 0))
 closeBtn.MouseButton1Click:Connect(function() screenGui:Destroy(); disableFly() end)
+local hideBtn = createBtn("-", Color3.fromRGB(200, 160, 255))
+local upBtn = createBtn("UP", Color3.fromRGB(150, 255, 150))
+local plusBtn = createBtn("+", Color3.fromRGB(160, 180, 255))
+local title = Instance.new("TextLabel", mainFrame)
+title.Size, title.BackgroundColor3, title.Text = UDim2.new(0, 100, 0, 40), Color3.fromRGB(255, 100, 255), "ULTRA FLY"
+title.TextColor3, title.Font, title.TextSize = Color3.new(0,0,0), "SourceSansBold", 12
+local downBtn = createBtn("DOWN", Color3.fromRGB(220, 255, 160))
+local minusBtn = createBtn("-", Color3.fromRGB(180, 255, 255))
+local speedVal = Instance.new("TextLabel", mainFrame)
+speedVal.BackgroundColor3, speedVal.Text = Color3.fromRGB(255, 100, 0), tostring(speedValue)
+speedVal.TextColor3, speedVal.TextSize = Color3.new(0,0,0), 20
+local flyBtn = createBtn("FLY", Color3.fromRGB(255, 255, 100))
 
-local hideBtn = Instance.new("TextButton", mainFrame)
-hideBtn.Size = UDim2.new(0, 60, 0, 40); hideBtn.Position = UDim2.new(0, 45, 0, 0)
-hideBtn.BackgroundColor3 = Color3.fromRGB(0, 120, 255)
-hideBtn.Text = "-"; hideBtn.TextColor3 = Color3.new(1,1,1); hideBtn.TextSize = 30
+local function updateSpeed(v) speedValue = math.max(1, speedValue + v); speedVal.Text = tostring(speedValue) end
+upBtn.MouseButton1Click:Connect(function() updateSpeed(1) end)
+plusBtn.MouseButton1Click:Connect(function() updateSpeed(1) end)
+downBtn.MouseButton1Click:Connect(function() updateSpeed(-1) end)
+minusBtn.MouseButton1Click:Connect(function() updateSpeed(-1) end)
+flyBtn.MouseButton1Click:Connect(function() if isFlying then disableFly() else enableFly() end end)
 
-local nameTag = Instance.new("TextLabel", mainFrame)
-nameTag.Size = UDim2.new(0, 130, 0, 30); nameTag.Position = UDim2.new(0, 0, 0, 45)
-nameTag.BackgroundColor3 = Color3.fromRGB(0, 120, 255); nameTag.Text = "Nurali1k0_o"; nameTag.TextColor3 = Color3.new(1,1,1)
-
-local versionTag = Instance.new("TextLabel", mainFrame)
-versionTag.Size = UDim2.new(0, 80, 0, 30); versionTag.Position = UDim2.new(0, 135, 0, 45)
-versionTag.BackgroundColor3 = Color3.fromRGB(20, 100, 20); versionTag.Text = "V1"; versionTag.TextColor3 = Color3.new(1,1,1)
-
-local speedDisplay = Instance.new("TextLabel", mainFrame)
-speedDisplay.Name = "SpeedDisplay"; speedDisplay.Size = UDim2.new(0, 215, 0, 40); speedDisplay.Position = UDim2.new(0, 0, 0, 80)
-speedDisplay.BackgroundColor3 = Color3.fromRGB(220, 50, 50); speedDisplay.Text = "Скорость - " .. speedValue; speedDisplay.TextColor3 = Color3.new(1,1,1); speedDisplay.TextSize = 20
-
-local descText = Instance.new("TextLabel", mainFrame)
-descText.Size = UDim2.new(0, 140, 0, 30); descText.Position = UDim2.new(0, 0, 0, 125)
-descText.BackgroundColor3 = Color3.new(1,1,1); descText.Text = "Изменения скорости."; descText.TextScaled = true
-
-local minusBtn = Instance.new("TextButton", mainFrame)
-minusBtn.Size = UDim2.new(0, 45, 0, 30); minusBtn.Position = UDim2.new(0, 145, 0, 125)
-minusBtn.BackgroundColor3 = Color3.fromRGB(130, 50, 250); minusBtn.Text = "-"; minusBtn.TextColor3 = Color3.new(1,1,1)
-minusBtn.MouseButton1Click:Connect(function() speedValue = math.max(0, speedValue - 10); updateSpeedDisplay(); if not isFlying then applySpeed() end end)
-
-local plusBtn = Instance.new("TextButton", mainFrame)
-plusBtn.Size = UDim2.new(0, 45, 0, 30); plusBtn.Position = UDim2.new(0, 195, 0, 125)
-plusBtn.BackgroundColor3 = Color3.fromRGB(60, 60, 60); plusBtn.Text = "+"; plusBtn.TextColor3 = Color3.new(1,1,1)
-plusBtn.MouseButton1Click:Connect(function() speedValue = speedValue + 10; updateSpeedDisplay(); if not isFlying then applySpeed() end end)
-
-local upBtn = Instance.new("TextButton", mainFrame)
-upBtn.Size = UDim2.new(0, 50, 0, 30); upBtn.Position = UDim2.new(0, 0, 0, 160)
-upBtn.BackgroundColor3 = Color3.fromRGB(255, 165, 0); upBtn.Text = "Up"; upBtn.TextColor3 = Color3.new(1,1,1)
-upBtn.MouseButton1Click:Connect(function() speedValue = speedValue + 5; updateSpeedDisplay(); if not isFlying then applySpeed() end end)
-
-local downBtn = Instance.new("TextButton", mainFrame)
-downBtn.Size = UDim2.new(0, 50, 0, 30); downBtn.Position = UDim2.new(0, 55, 0, 160)
-downBtn.BackgroundColor3 = Color3.fromRGB(255, 255, 0); downBtn.Text = "Down"; downBtn.TextColor3 = Color3.new(1,1,1)
-downBtn.MouseButton1Click:Connect(function() speedValue = math.max(0, speedValue - 5); updateSpeedDisplay(); if not isFlying then applySpeed() end end)
-
-local unflyBtn = Instance.new("TextButton", mainFrame)
-unflyBtn.Size = UDim2.new(0, 60, 0, 30); unflyBtn.Position = UDim2.new(0, 110, 0, 160)
-unflyBtn.BackgroundColor3 = Color3.fromRGB(40, 40, 40); unflyBtn.Text = "Unfly"; unflyBtn.TextColor3 = Color3.new(1,1,1)
-unflyBtn.MouseButton1Click:Connect(disableFly)
-
-local flyBtn = Instance.new("TextButton", mainFrame)
-flyBtn.Size = UDim2.new(0, 60, 0, 30); flyBtn.Position = UDim2.new(0, 175, 0, 160)
-flyBtn.BackgroundColor3 = Color3.fromRGB(60, 60, 60); flyBtn.Text = "Fly"; flyBtn.TextColor3 = Color3.new(1,1,1)
-flyBtn.MouseButton1Click:Connect(enableFly)
-
+local collapsed = false
 hideBtn.MouseButton1Click:Connect(function()
-    local vis = not speedDisplay.Visible
-    for _, v in pairs({speedDisplay, descText, minusBtn, plusBtn, nameTag, versionTag, upBtn, downBtn, unflyBtn, flyBtn}) do v.Visible = vis end
-    hideBtn.Text = vis and "-" or "+"
+    collapsed = not collapsed
+    for _, v in pairs(mainFrame:GetChildren()) do
+        if (v:IsA("TextButton") or v:IsA("TextLabel")) and v ~= hideBtn and v ~= closeBtn then v.Visible = not collapsed end
+    end
+    hideBtn.Text = collapsed and "+" or "-"
 end)
 
-player.CharacterAdded:Connect(function() task.wait(0.5); disableFly(); applySpeed() end)
-applySpeed()
+player.CharacterAdded:Connect(function() task.wait(0.5); disableFly() end)
