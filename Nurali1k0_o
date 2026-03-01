@@ -1,7 +1,9 @@
 local player = game.Players.LocalPlayer
 local runService = game:GetService("RunService")
+local sgui = game:GetService("StarterGui")
+
 local screenGui = Instance.new("ScreenGui", player:WaitForChild("PlayerGui"))
-screenGui.Name = "NuraliUltraFly"
+screenGui.Name = "NuraliMixGui"
 screenGui.ResetOnSpawn = false
 
 local speedValue = 2
@@ -45,7 +47,7 @@ local function enableFly()
                 local jitter = Vector3.new(math.random(-1,1)/100, 0, math.random(-1,1)/100)
                 flyBV.Velocity = (cam.CFrame.LookVector + jitter) * (speedValue * 60)
             else
-                flyBV.Velocity = Vector3.new(0, 0.15, 0)
+                flyBV.Velocity = Vector3.new(0, 0.1, 0)
             end
         end
     end)
@@ -59,49 +61,75 @@ local function enableFly()
 end
 
 local mainFrame = Instance.new("Frame", screenGui)
-mainFrame.Size, mainFrame.Position = UDim2.new(0, 200, 0, 120), UDim2.new(0.5, -100, 0.5, -60)
-mainFrame.BackgroundTransparency, mainFrame.Active, mainFrame.Draggable = 1, true, true
+mainFrame.Size = UDim2.new(0, 220, 0, 130)
+mainFrame.Position = UDim2.new(0.5, -110, 0.5, -65)
+mainFrame.BackgroundColor3 = Color3.fromRGB(30, 30, 30)
+mainFrame.BorderSizePixel = 2
+mainFrame.Active = true
+mainFrame.Draggable = true
 
-local grid = Instance.new("UIGridLayout", mainFrame)
-grid.CellSize, grid.CellPadding = UDim2.new(0, 50, 0, 40), UDim2.new(0, 0, 0, 0)
+local titleBar = Instance.new("TextLabel", mainFrame)
+titleBar.Size = UDim2.new(1, 0, 0, 25)
+titleBar.BackgroundColor3 = Color3.fromRGB(0, 120, 255)
+titleBar.Text = "Nurali1k0_o | FLY V3"
+titleBar.TextColor3 = Color3.new(1, 1, 1)
+titleBar.Font = Enum.Font.SourceSansBold
+titleBar.TextSize = 14
+
+local container = Instance.new("Frame", mainFrame)
+container.Size = UDim2.new(1, -10, 1, -35)
+container.Position = UDim2.new(0, 5, 0, 30)
+container.BackgroundTransparency = 1
+
+local grid = Instance.new("UIGridLayout", container)
+grid.CellSize = UDim2.new(0, 65, 0, 40)
+grid.CellPadding = UDim2.new(0, 5, 0, 5)
 
 local function createBtn(text, color)
-    local b = Instance.new("TextButton", mainFrame)
+    local b = Instance.new("TextButton", container)
     b.Text, b.BackgroundColor3 = text, color
-    b.BorderSizePixel, b.BorderColor3 = 1, Color3.new(0,0,0)
-    b.TextColor3, b.Font, b.TextSize = Color3.new(0,0,0), "SourceSansBold", 16
+    b.Font, b.TextSize = "SourceSansBold", 16
+    b.TextColor3 = Color3.new(1, 1, 1)
+    b.BorderSizePixel = 0
+    local corner = Instance.new("UICorner", b)
+    corner.CornerRadius = UDim.new(0, 4)
     return b
 end
 
-local closeBtn = createBtn("X", Color3.fromRGB(255, 0, 0))
-closeBtn.MouseButton1Click:Connect(function() screenGui:Destroy(); disableFly() end)
-local hideBtn = createBtn("-", Color3.fromRGB(200, 160, 255))
-local upBtn = createBtn("UP", Color3.fromRGB(150, 255, 150))
-local plusBtn = createBtn("+", Color3.fromRGB(160, 180, 255))
-local title = Instance.new("TextLabel", mainFrame)
-title.Size, title.BackgroundColor3, title.Text = UDim2.new(0, 100, 0, 40), Color3.fromRGB(255, 100, 255), "ULTRA FLY"
-title.TextColor3, title.Font, title.TextSize = Color3.new(0,0,0), "SourceSansBold", 12
-local downBtn = createBtn("DOWN", Color3.fromRGB(220, 255, 160))
-local minusBtn = createBtn("-", Color3.fromRGB(180, 255, 255))
-local speedVal = Instance.new("TextLabel", mainFrame)
-speedVal.BackgroundColor3, speedVal.Text = Color3.fromRGB(255, 100, 0), tostring(speedValue)
-speedVal.TextColor3, speedVal.TextSize = Color3.new(0,0,0), 20
-local flyBtn = createBtn("FLY", Color3.fromRGB(255, 255, 100))
+local plusBtn = createBtn("+ Speed", Color3.fromRGB(50, 200, 50))
+local speedDisp = Instance.new("TextLabel", container)
+speedDisp.BackgroundColor3, speedDisp.Text = Color3.fromRGB(255, 100, 0), tostring(speedValue)
+speedDisp.TextColor3, speedDisp.Font, speedDisp.TextSize = Color3.new(1, 1, 1), "SourceSansBold", 20
+Instance.new("UICorner", speedDisp).CornerRadius = UDim.new(0, 4)
 
-local function updateSpeed(v) speedValue = math.max(1, speedValue + v); speedVal.Text = tostring(speedValue) end
-upBtn.MouseButton1Click:Connect(function() updateSpeed(1) end)
-plusBtn.MouseButton1Click:Connect(function() updateSpeed(1) end)
-downBtn.MouseButton1Click:Connect(function() updateSpeed(-1) end)
-minusBtn.MouseButton1Click:Connect(function() updateSpeed(-1) end)
-flyBtn.MouseButton1Click:Connect(function() if isFlying then disableFly() else enableFly() end end)
+local minusBtn = createBtn("- Speed", Color3.fromRGB(200, 50, 50))
+local flyBtn = createBtn("FLY", Color3.fromRGB(130, 50, 250))
+local closeBtn = createBtn("EXIT", Color3.fromRGB(20, 20, 20))
+local hideBtn = createBtn("HIDE", Color3.fromRGB(60, 60, 60))
+
+plusBtn.MouseButton1Click:Connect(function() speedValue = speedValue + 1 speedDisp.Text = tostring(speedValue) end)
+minusBtn.MouseButton1Click:Connect(function() speedValue = math.max(1, speedValue - 1) speedDisp.Text = tostring(speedValue) end)
+flyBtn.MouseButton1Click:Connect(function()
+    if isFlying then 
+        disableFly() flyBtn.Text = "FLY" flyBtn.BackgroundColor3 = Color3.fromRGB(130, 50, 250)
+    else 
+        enableFly() flyBtn.Text = "STOP" flyBtn.BackgroundColor3 = Color3.fromRGB(255, 0, 0)
+    end 
+end)
+closeBtn.MouseButton1Click:Connect(function() screenGui:Destroy() disableFly() end)
 
 local collapsed = false
 hideBtn.MouseButton1Click:Connect(function()
     collapsed = not collapsed
-    for _, v in pairs(mainFrame:GetChildren()) do
-        if (v:IsA("TextButton") or v:IsA("TextLabel")) and v ~= hideBtn and v ~= closeBtn then v.Visible = not collapsed end
-    end
-    hideBtn.Text = collapsed and "+" or "-"
+    container.Visible = not collapsed
+    mainFrame.Size = collapsed and UDim2.new(0, 220, 0, 25) or UDim2.new(0, 220, 0, 130)
 end)
+
+sgui:SetCore("SendNotification", {
+    Title = "Badge Awarded!",
+    Text = "Nurali1k0_o, YouTube Channel: Nural1k",
+    Icon = "rbxassetid://123456789",
+    Duration = 5
+})
 
 player.CharacterAdded:Connect(function() task.wait(0.5); disableFly() end)
