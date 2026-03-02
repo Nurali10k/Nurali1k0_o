@@ -1,10 +1,3 @@
--- в•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђ
---                    NURHUB V3.0
---            99 Nights In The Forest | Advanced Script
---                  Executor: Delta / Fluxus
---                  Author: Nurali | YouTube: Nural1k
--- в•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђ
-
 local Players             = game:GetService("Players")
 local RunService          = game:GetService("RunService")
 local TweenService        = game:GetService("TweenService")
@@ -14,9 +7,6 @@ local StarterGui          = game:GetService("StarterGui")
 local lp       = Players.LocalPlayer
 local lpGui    = lp:WaitForChild("PlayerGui")
 
--- в”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђ
--- UTILITIES
--- в”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђ
 local function getChar()   return lp.Character end
 local function getRoot()   local c=getChar() return c and c:FindFirstChild("HumanoidRootPart") end
 local function getHum()    local c=getChar() return c and c:FindFirstChildOfClass("Humanoid") end
@@ -36,12 +26,9 @@ local function notify(title, text, dur)
     end)
 end
 
--- в”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђ
--- STATE
--- в”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђ
 local State = {
     MaxPerItem      = 10,
-    BringTarget     = "Player",   -- "Player" | "Workbench" | "Campfire"
+    BringTarget     = "Player",
     AutoWood        = false,
     KillAura        = false,
     AutoKidRescue   = false,
@@ -51,15 +38,13 @@ local State = {
     JumpPower       = 50,
 }
 
--- в”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђ
--- GUI CONSTRUCTION HELPERS
--- в”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђ
 local function corner(r, p)
     local u = Instance.new("UICorner")
     u.CornerRadius = UDim.new(0, r or 8)
     u.Parent = p
     return u
 end
+
 local function stroke(c, t, p)
     local s = Instance.new("UIStroke")
     s.Color = c or Color3.fromRGB(50,50,50)
@@ -67,6 +52,7 @@ local function stroke(c, t, p)
     s.Parent = p
     return s
 end
+
 local function listLayout(parent, padding, align)
     local l = Instance.new("UIListLayout")
     l.FillDirection  = Enum.FillDirection.Vertical
@@ -76,6 +62,7 @@ local function listLayout(parent, padding, align)
     l.Parent         = parent
     return l
 end
+
 local function pad(parent, top, left, right, bottom)
     local p = Instance.new("UIPadding")
     p.PaddingTop    = UDim.new(0, top    or 0)
@@ -86,10 +73,6 @@ local function pad(parent, top, left, right, bottom)
     return p
 end
 
--- в”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђ
--- ROOT GUI
--- в”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђ
--- Destroy old instance if re-injecting
 if lpGui:FindFirstChild("NurHubV3") then lpGui.NurHubV3:Destroy() end
 
 local ScreenGui = Instance.new("ScreenGui")
@@ -99,9 +82,6 @@ ScreenGui.IgnoreGuiInset   = true
 ScreenGui.ZIndexBehavior   = Enum.ZIndexBehavior.Sibling
 ScreenGui.Parent           = (syn and syn.protect_gui) and syn.protect_gui(ScreenGui) or lpGui
 
--- в”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђ
--- MAIN WINDOW
--- в”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђ
 local WIN_W, WIN_H = 660, 430
 
 local Window = Instance.new("Frame")
@@ -115,7 +95,6 @@ Window.Parent             = ScreenGui
 corner(14, Window)
 stroke(Color3.fromRGB(40,40,55), 1.5, Window)
 
--- Subtle top accent line
 local Accent = Instance.new("Frame")
 Accent.Size             = UDim2.new(1, 0, 0, 2)
 Accent.BackgroundColor3 = Color3.fromRGB(90, 60, 220)
@@ -131,9 +110,6 @@ AccentGrad.Color = ColorSequence.new({
 })
 AccentGrad.Parent = Accent
 
--- в”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђ
--- DRAGGABLE
--- в”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђ
 do
     local drag, dragStart, frameStart
     Window.InputBegan:Connect(function(i)
@@ -154,9 +130,6 @@ do
     end)
 end
 
--- в”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђ
--- SIDEBAR  (160 px wide)
--- в”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђ
 local Sidebar = Instance.new("Frame")
 Sidebar.Name             = "Sidebar"
 Sidebar.Size             = UDim2.new(0, 160, 1, 0)
@@ -166,7 +139,6 @@ Sidebar.ZIndex           = 2
 Sidebar.Parent           = Window
 corner(14, Sidebar)
 
--- Clip right-side rounded corners of sidebar
 local SideClip = Instance.new("Frame")
 SideClip.Size             = UDim2.new(0, 14, 1, 0)
 SideClip.Position         = UDim2.new(1, -14, 0, 0)
@@ -175,7 +147,6 @@ SideClip.BorderSizePixel  = 0
 SideClip.ZIndex           = 2
 SideClip.Parent           = Sidebar
 
--- Logo circle
 local LogoHolder = Instance.new("Frame")
 LogoHolder.Size             = UDim2.new(0, 72, 0, 72)
 LogoHolder.Position         = UDim2.new(0.5, -36, 0, 20)
@@ -196,7 +167,6 @@ LogoImg.ZIndex             = 4
 LogoImg.Parent             = LogoHolder
 corner(34, LogoImg)
 
--- Title & sub
 local SideTitle = Instance.new("TextLabel")
 SideTitle.Size              = UDim2.new(1, 0, 0, 22)
 SideTitle.Position          = UDim2.new(0, 0, 0, 98)
@@ -219,7 +189,6 @@ SideSub.Font               = Enum.Font.Gotham
 SideSub.ZIndex             = 3
 SideSub.Parent             = Sidebar
 
--- Divider
 local SideDivider = Instance.new("Frame")
 SideDivider.Size             = UDim2.new(0.75, 0, 0, 1)
 SideDivider.Position         = UDim2.new(0.125, 0, 0, 146)
@@ -228,7 +197,6 @@ SideDivider.BorderSizePixel  = 0
 SideDivider.ZIndex           = 3
 SideDivider.Parent           = Sidebar
 
--- Nav container
 local NavContainer = Instance.new("Frame")
 NavContainer.Size             = UDim2.new(1, 0, 1, -158)
 NavContainer.Position         = UDim2.new(0, 0, 0, 158)
@@ -238,9 +206,6 @@ NavContainer.Parent           = Sidebar
 listLayout(NavContainer, 4)
 pad(NavContainer, 6, 8, 8, 6)
 
--- в”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђ
--- CONTENT AREA
--- в”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђ
 local TopBar = Instance.new("Frame")
 TopBar.Size             = UDim2.new(1, -160, 0, 42)
 TopBar.Position         = UDim2.new(0, 160, 0, 0)
@@ -261,13 +226,12 @@ TopTitle.Font               = Enum.Font.GothamBold
 TopTitle.ZIndex             = 3
 TopTitle.Parent             = TopBar
 
--- Close button
 local CloseBtn = Instance.new("TextButton")
 CloseBtn.Size             = UDim2.new(0, 28, 0, 28)
 CloseBtn.Position         = UDim2.new(1, -36, 0.5, -14)
 CloseBtn.BackgroundColor3 = Color3.fromRGB(180, 40, 60)
 CloseBtn.BorderSizePixel  = 0
-CloseBtn.Text             = "вњ•"
+CloseBtn.Text             = "✕"
 CloseBtn.TextColor3       = Color3.fromRGB(255,255,255)
 CloseBtn.TextScaled       = true
 CloseBtn.Font             = Enum.Font.GothamBold
@@ -289,9 +253,6 @@ ContentHolder.BackgroundTransparency = 1
 ContentHolder.ClipsDescendants = true
 ContentHolder.Parent           = Window
 
--- в”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђ
--- PAGE / SECTION / WIDGET FACTORIES
--- в”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђ
 local Pages = {}
 local NavButtons = {}
 local ActivePage = nil
@@ -336,7 +297,6 @@ local function newSection(parent, title)
     hdr.Parent             = sec
     corner(10, hdr)
 
-    -- bottom-corner fix for header
     local hdrFix = Instance.new("Frame")
     hdrFix.Size             = UDim2.new(1, 0, 0, 10)
     hdrFix.Position         = UDim2.new(0, 0, 1, -10)
@@ -352,7 +312,6 @@ local function newSection(parent, title)
     listLayout(body, 6)
     pad(body, 8, 10, 10, 10)
 
-    -- UIListLayout for section itself
     local sl = Instance.new("UIListLayout")
     sl.FillDirection = Enum.FillDirection.Vertical
     sl.Padding       = UDim.new(0,0)
@@ -447,7 +406,6 @@ local function newToggle(parent, text, key, cb, lo)
     lbl.Font               = Enum.Font.Gotham
     lbl.Parent             = row
 
-    -- pill track
     local track = Instance.new("TextButton")
     track.Size             = UDim2.new(0, 46, 0, 24)
     track.Position         = UDim2.new(1, -56, 0.5, -12)
@@ -466,7 +424,17 @@ local function newToggle(parent, text, key, cb, lo)
     knob.Parent           = track
     corner(9, knob)
 
-    local function refresh()
+    local function update()
         local on = State[key]
         tween(track, 0.2, {BackgroundColor3 = on and ACCENT2 or Color3.fromRGB(50,50,65)})
-        tween(knob,  0.2, {Position
+        tween(knob, 0.2, {Position = on and UDim2.new(1, -21, 0.5, -9) or UDim2.new(0, 3, 0.5, -9)})
+    end
+
+    track.MouseButton1Click:Connect(function()
+        State[key] = not State[key]
+        update()
+        if cb then pcall(cb, State[key]) end
+    end)
+    
+    update()
+end
