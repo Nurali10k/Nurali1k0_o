@@ -1,148 +1,472 @@
-local player = game.Players.LocalPlayer
-local char = player.Character or player.CharacterAdded:Wait()
-local root = char:WaitForChild("HumanoidRootPart")
-local sgui = game:GetService("StarterGui")
-local ts = game:GetService("TweenService")
+-- в•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђ
+--                    NURHUB V3.0
+--            99 Nights In The Forest | Advanced Script
+--                  Executor: Delta / Fluxus
+--                  Author: Nurali | YouTube: Nural1k
+-- в•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђ
 
-local screenGui = Instance.new("ScreenGui", player:WaitForChild("PlayerGui"))
-screenGui.Name = "NurHub_Final_V4"
-screenGui.ResetOnSpawn = false
+local Players             = game:GetService("Players")
+local RunService          = game:GetService("RunService")
+local TweenService        = game:GetService("TweenService")
+local UserInputService    = game:GetService("UserInputService")
+local StarterGui          = game:GetService("StarterGui")
 
-local myIcon = "rbxassetid://120698730348379"
-local bringAmount = 1
-local bringTarget = "Player"
-local autoWood, killAura, infJump = false, false, false
+local lp       = Players.LocalPlayer
+local lpGui    = lp:WaitForChild("PlayerGui")
 
-local main = Instance.new("Frame", screenGui)
-main.Size = UDim2.new(0, 520, 0, 360)
-main.Position = UDim2.new(0.5, -260, 0.5, -180)
-main.BackgroundColor3 = Color3.fromRGB(15, 15, 15)
-main.Active, main.Draggable = true, true
-Instance.new("UICorner", main).CornerRadius = UDim.new(0, 10)
+-- в”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђ
+-- UTILITIES
+-- в”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђ
+local function getChar()   return lp.Character end
+local function getRoot()   local c=getChar() return c and c:FindFirstChild("HumanoidRootPart") end
+local function getHum()    local c=getChar() return c and c:FindFirstChildOfClass("Humanoid") end
 
-local sideBar = Instance.new("Frame", main)
-sideBar.Size = UDim2.new(0, 130, 1, 0)
-sideBar.BackgroundColor3 = Color3.fromRGB(22, 22, 22)
-Instance.new("UICorner", sideBar)
+local function tween(obj, t, props)
+    TweenService:Create(obj, TweenInfo.new(t, Enum.EasingStyle.Quad, Enum.EasingDirection.Out), props):Play()
+end
 
-local userImage = Instance.new("ImageLabel", sideBar)
-userImage.Size = UDim2.new(0, 60, 0, 60)
-userImage.Position = UDim2.new(0.5, -30, 0, 15)
-userImage.BackgroundTransparency = 1
-userImage.Image = myIcon
-Instance.new("UICorner", userImage).CornerRadius = UDim.new(1, 0)
-
-local title = Instance.new("TextLabel", sideBar)
-title.Size = UDim2.new(1, 0, 0, 30)
-title.Position = UDim2.new(0, 0, 0, 80)
-title.Text = "NURHUB V1"
-title.TextColor3 = Color3.fromRGB(150, 0, 255)
-title.Font = "GothamBold"
-title.TextSize = 16
-title.BackgroundTransparency = 1
-
-local content = Instance.new("ScrollingFrame", main)
-content.Size = UDim2.new(1, -150, 1, -50)
-content.Position = UDim2.new(0, 140, 0, 40)
-content.BackgroundTransparency = 1
-content.CanvasSize = UDim2.new(0, 0, 2, 0)
-content.ScrollBarThickness = 2
-Instance.new("UIListLayout", content).Padding = UDim.new(0, 10)
-
-local function createToggle(text, callback)
-    local b = Instance.new("TextButton", content)
-    b.Size = UDim2.new(1, -10, 0, 40)
-    b.Text = text .. ": OFF"
-    b.BackgroundColor3 = Color3.fromRGB(35, 35, 35)
-    b.TextColor3 = Color3.new(1, 1, 1)
-    b.Font = "GothamBold"
-    Instance.new("UICorner", b)
-    local s = false
-    b.MouseButton1Click:Connect(function()
-        s = not s
-        b.Text = text .. (s and ": ON" or ": OFF")
-        b.BackgroundColor3 = s and Color3.fromRGB(150, 0, 255) or Color3.fromRGB(35, 35, 35)
-        callback(s)
+local function notify(title, text, dur)
+    pcall(function()
+        StarterGui:SetCore("SendNotification", {
+            Title    = title,
+            Text     = text,
+            Duration = dur or 5,
+            Icon     = "rbxassetid://120698730348379"
+        })
     end)
 end
 
-local function createInput(text, placeholder, callback)
-    local f = Instance.new("Frame", content)
-    f.Size = UDim2.new(1, -10, 0, 40)
-    f.BackgroundColor3 = Color3.fromRGB(30, 30, 30)
-    Instance.new("UICorner", f)
-    local l = Instance.new("TextLabel", f)
-    l.Size = UDim2.new(0.5, 0, 1, 0)
-    l.Position = UDim2.new(0, 10, 0, 0)
-    l.Text = text
-    l.TextColor3 = Color3.new(1, 1, 1)
-    l.TextXAlignment = "Left"
-    l.BackgroundTransparency = 1
-    local i = Instance.new("TextBox", f)
-    i.Size = UDim2.new(0.4, 0, 0.7, 0)
-    i.Position = UDim2.new(0.55, 0, 0.15, 0)
-    i.PlaceholderText = placeholder
-    i.BackgroundColor3 = Color3.fromRGB(50, 50, 50)
-    i.TextColor3 = Color3.new(1, 1, 1)
-    Instance.new("UICorner", i)
-    i.FocusLost:Connect(function() callback(i.Text) end)
+-- в”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђ
+-- STATE
+-- в”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђ
+local State = {
+    MaxPerItem      = 10,
+    BringTarget     = "Player",   -- "Player" | "Workbench" | "Campfire"
+    AutoWood        = false,
+    KillAura        = false,
+    AutoKidRescue   = false,
+    InfiniteJump    = false,
+    Noclip          = false,
+    WalkSpeed       = 16,
+    JumpPower       = 50,
+}
+
+-- в”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђ
+-- GUI CONSTRUCTION HELPERS
+-- в”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђ
+local function corner(r, p)
+    local u = Instance.new("UICorner")
+    u.CornerRadius = UDim.new(0, r or 8)
+    u.Parent = p
+    return u
+end
+local function stroke(c, t, p)
+    local s = Instance.new("UIStroke")
+    s.Color = c or Color3.fromRGB(50,50,50)
+    s.Thickness = t or 1
+    s.Parent = p
+    return s
+end
+local function listLayout(parent, padding, align)
+    local l = Instance.new("UIListLayout")
+    l.FillDirection  = Enum.FillDirection.Vertical
+    l.HorizontalAlignment = align or Enum.HorizontalAlignment.Left
+    l.Padding        = UDim.new(0, padding or 8)
+    l.SortOrder      = Enum.SortOrder.LayoutOrder
+    l.Parent         = parent
+    return l
+end
+local function pad(parent, top, left, right, bottom)
+    local p = Instance.new("UIPadding")
+    p.PaddingTop    = UDim.new(0, top    or 0)
+    p.PaddingLeft   = UDim.new(0, left   or 0)
+    p.PaddingRight  = UDim.new(0, right  or 0)
+    p.PaddingBottom = UDim.new(0, bottom or 0)
+    p.Parent = parent
+    return p
 end
 
-createInput("Max Per Item:", "10", function(v) bringAmount = tonumber(v) or 1 end)
-createInput("Bring To:", "Player/Fire", function(v) bringTarget = v end)
+-- в”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђ
+-- ROOT GUI
+-- в”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђ
+-- Destroy old instance if re-injecting
+if lpGui:FindFirstChild("NurHubV3") then lpGui.NurHubV3:Destroy() end
 
-createToggle("Auto Wood", function(s)
-    autoWood = s
-    spawn(function()
-        while autoWood do
-            task.wait(0.3)
-            for _, v in pairs(workspace:GetDescendants()) do
-                if v:IsA("Model") and (v.Name:find("Tree") or v.Name:find("Wood")) then
-                    if (root.Position - v:GetModelCFrame().p).Magnitude < 20 then
-                        local t = char:FindFirstChildOfClass("Tool")
-                        if t then t:Activate() end
-                    end
-                end
-            end
+local ScreenGui = Instance.new("ScreenGui")
+ScreenGui.Name             = "NurHubV3"
+ScreenGui.ResetOnSpawn     = false
+ScreenGui.IgnoreGuiInset   = true
+ScreenGui.ZIndexBehavior   = Enum.ZIndexBehavior.Sibling
+ScreenGui.Parent           = (syn and syn.protect_gui) and syn.protect_gui(ScreenGui) or lpGui
+
+-- в”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђ
+-- MAIN WINDOW
+-- в”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђ
+local WIN_W, WIN_H = 660, 430
+
+local Window = Instance.new("Frame")
+Window.Name               = "Window"
+Window.Size               = UDim2.new(0, WIN_W, 0, WIN_H)
+Window.Position           = UDim2.new(0.5, -WIN_W/2, 0.5, -WIN_H/2)
+Window.BackgroundColor3   = Color3.fromRGB(15, 15, 15)
+Window.BorderSizePixel    = 0
+Window.ClipsDescendants   = true
+Window.Parent             = ScreenGui
+corner(14, Window)
+stroke(Color3.fromRGB(40,40,55), 1.5, Window)
+
+-- Subtle top accent line
+local Accent = Instance.new("Frame")
+Accent.Size             = UDim2.new(1, 0, 0, 2)
+Accent.BackgroundColor3 = Color3.fromRGB(90, 60, 220)
+Accent.BorderSizePixel  = 0
+Accent.ZIndex           = 10
+Accent.Parent           = Window
+
+local AccentGrad = Instance.new("UIGradient")
+AccentGrad.Color = ColorSequence.new({
+    ColorSequenceKeypoint.new(0,   Color3.fromRGB(80,  40, 200)),
+    ColorSequenceKeypoint.new(0.5, Color3.fromRGB(140, 80, 255)),
+    ColorSequenceKeypoint.new(1,   Color3.fromRGB(80,  40, 200)),
+})
+AccentGrad.Parent = Accent
+
+-- в”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђ
+-- DRAGGABLE
+-- в”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђ
+do
+    local drag, dragStart, frameStart
+    Window.InputBegan:Connect(function(i)
+        if i.UserInputType == Enum.UserInputType.MouseButton1 then
+            drag = true; dragStart = i.Position; frameStart = Window.Position
+            i.Changed:Connect(function()
+                if i.UserInputState == Enum.UserInputState.End then drag = false end
+            end)
         end
     end)
-end)
-
-createToggle("Kill Aura", function(s)
-    killAura = s
-    spawn(function()
-        while killAura do
-            task.wait(0.2)
-            for _, v in pairs(workspace:GetDescendants()) do
-                if v:IsA("Humanoid") and v.Parent.Name ~= player.Name and v.Health > 0 then
-                    local p = v.Parent:FindFirstChild("HumanoidRootPart")
-                    if p and (root.Position - p.Position).Magnitude < 20 then
-                        local t = char:FindFirstChildOfClass("Tool")
-                        if t then t:Activate() end
-                    end
-                end
-            end
+    UserInputService.InputChanged:Connect(function(i)
+        if drag and i.UserInputType == Enum.UserInputType.MouseMovement then
+            local d = i.Position - dragStart
+            Window.Position = UDim2.new(
+                frameStart.X.Scale, frameStart.X.Offset + d.X,
+                frameStart.Y.Scale, frameStart.Y.Offset + d.Y)
         end
     end)
+end
+
+-- в”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђ
+-- SIDEBAR  (160 px wide)
+-- в”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђ
+local Sidebar = Instance.new("Frame")
+Sidebar.Name             = "Sidebar"
+Sidebar.Size             = UDim2.new(0, 160, 1, 0)
+Sidebar.BackgroundColor3 = Color3.fromRGB(20, 20, 20)
+Sidebar.BorderSizePixel  = 0
+Sidebar.ZIndex           = 2
+Sidebar.Parent           = Window
+corner(14, Sidebar)
+
+-- Clip right-side rounded corners of sidebar
+local SideClip = Instance.new("Frame")
+SideClip.Size             = UDim2.new(0, 14, 1, 0)
+SideClip.Position         = UDim2.new(1, -14, 0, 0)
+SideClip.BackgroundColor3 = Color3.fromRGB(20, 20, 20)
+SideClip.BorderSizePixel  = 0
+SideClip.ZIndex           = 2
+SideClip.Parent           = Sidebar
+
+-- Logo circle
+local LogoHolder = Instance.new("Frame")
+LogoHolder.Size             = UDim2.new(0, 72, 0, 72)
+LogoHolder.Position         = UDim2.new(0.5, -36, 0, 20)
+LogoHolder.BackgroundColor3 = Color3.fromRGB(35, 30, 55)
+LogoHolder.BorderSizePixel  = 0
+LogoHolder.ZIndex           = 3
+LogoHolder.Parent           = Sidebar
+corner(36, LogoHolder)
+stroke(Color3.fromRGB(90, 60, 200), 2, LogoHolder)
+
+local LogoImg = Instance.new("ImageLabel")
+LogoImg.Size               = UDim2.new(1, -4, 1, -4)
+LogoImg.Position           = UDim2.new(0, 2, 0, 2)
+LogoImg.BackgroundTransparency = 1
+LogoImg.Image              = "rbxassetid://120698730348379"
+LogoImg.ScaleType          = Enum.ScaleType.Crop
+LogoImg.ZIndex             = 4
+LogoImg.Parent             = LogoHolder
+corner(34, LogoImg)
+
+-- Title & sub
+local SideTitle = Instance.new("TextLabel")
+SideTitle.Size              = UDim2.new(1, 0, 0, 22)
+SideTitle.Position          = UDim2.new(0, 0, 0, 98)
+SideTitle.BackgroundTransparency = 1
+SideTitle.Text              = "NURHUB V3.0"
+SideTitle.TextColor3        = Color3.fromRGB(235, 235, 255)
+SideTitle.TextScaled        = true
+SideTitle.Font              = Enum.Font.GothamBold
+SideTitle.ZIndex            = 3
+SideTitle.Parent            = Sidebar
+
+local SideSub = Instance.new("TextLabel")
+SideSub.Size               = UDim2.new(1, 0, 0, 16)
+SideSub.Position           = UDim2.new(0, 0, 0, 122)
+SideSub.BackgroundTransparency = 1
+SideSub.Text               = "99 Nights In The Forest"
+SideSub.TextColor3         = Color3.fromRGB(100, 100, 130)
+SideSub.TextScaled         = true
+SideSub.Font               = Enum.Font.Gotham
+SideSub.ZIndex             = 3
+SideSub.Parent             = Sidebar
+
+-- Divider
+local SideDivider = Instance.new("Frame")
+SideDivider.Size             = UDim2.new(0.75, 0, 0, 1)
+SideDivider.Position         = UDim2.new(0.125, 0, 0, 146)
+SideDivider.BackgroundColor3 = Color3.fromRGB(45, 45, 60)
+SideDivider.BorderSizePixel  = 0
+SideDivider.ZIndex           = 3
+SideDivider.Parent           = Sidebar
+
+-- Nav container
+local NavContainer = Instance.new("Frame")
+NavContainer.Size             = UDim2.new(1, 0, 1, -158)
+NavContainer.Position         = UDim2.new(0, 0, 0, 158)
+NavContainer.BackgroundTransparency = 1
+NavContainer.ZIndex           = 3
+NavContainer.Parent           = Sidebar
+listLayout(NavContainer, 4)
+pad(NavContainer, 6, 8, 8, 6)
+
+-- в”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђ
+-- CONTENT AREA
+-- в”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђ
+local TopBar = Instance.new("Frame")
+TopBar.Size             = UDim2.new(1, -160, 0, 42)
+TopBar.Position         = UDim2.new(0, 160, 0, 0)
+TopBar.BackgroundColor3 = Color3.fromRGB(18, 18, 18)
+TopBar.BorderSizePixel  = 0
+TopBar.ZIndex           = 2
+TopBar.Parent           = Window
+
+local TopTitle = Instance.new("TextLabel")
+TopTitle.Size               = UDim2.new(1, -60, 1, 0)
+TopTitle.Position           = UDim2.new(0, 16, 0, 0)
+TopTitle.BackgroundTransparency = 1
+TopTitle.Text               = "Bring System"
+TopTitle.TextColor3         = Color3.fromRGB(210, 210, 240)
+TopTitle.TextXAlignment     = Enum.TextXAlignment.Left
+TopTitle.TextScaled         = true
+TopTitle.Font               = Enum.Font.GothamBold
+TopTitle.ZIndex             = 3
+TopTitle.Parent             = TopBar
+
+-- Close button
+local CloseBtn = Instance.new("TextButton")
+CloseBtn.Size             = UDim2.new(0, 28, 0, 28)
+CloseBtn.Position         = UDim2.new(1, -36, 0.5, -14)
+CloseBtn.BackgroundColor3 = Color3.fromRGB(180, 40, 60)
+CloseBtn.BorderSizePixel  = 0
+CloseBtn.Text             = "вњ•"
+CloseBtn.TextColor3       = Color3.fromRGB(255,255,255)
+CloseBtn.TextScaled       = true
+CloseBtn.Font             = Enum.Font.GothamBold
+CloseBtn.ZIndex           = 5
+CloseBtn.Parent           = TopBar
+corner(7, CloseBtn)
+
+CloseBtn.MouseButton1Click:Connect(function()
+    tween(Window, 0.3, {Size=UDim2.new(0,0,0,0), Position=UDim2.new(0.5,0,0.5,0)})
+    task.wait(0.32)
+    ScreenGui:Destroy()
 end)
 
-createInput("WalkSpeed:", "16", function(v) char.Humanoid.WalkSpeed = tonumber(v) or 16 end)
+local ContentHolder = Instance.new("Frame")
+ContentHolder.Name             = "ContentHolder"
+ContentHolder.Size             = UDim2.new(1, -160, 1, -42)
+ContentHolder.Position         = UDim2.new(0, 160, 0, 42)
+ContentHolder.BackgroundTransparency = 1
+ContentHolder.ClipsDescendants = true
+ContentHolder.Parent           = Window
 
-createToggle("Inf Jump", function(s) infJump = s end)
-game:GetService("UserInputService").JumpRequest:Connect(function()
-    if infJump then char.Humanoid:ChangeState("Jumping") end
-end)
+-- в”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђ
+-- PAGE / SECTION / WIDGET FACTORIES
+-- в”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђ
+local Pages = {}
+local NavButtons = {}
+local ActivePage = nil
 
-local close = Instance.new("TextButton", main)
-close.Size = UDim2.new(0, 30, 0, 30)
-close.Position = UDim2.new(1, -35, 0, 5)
-close.Text = "×"
-close.TextColor3 = Color3.new(1, 1, 1)
-close.TextSize = 30
-close.BackgroundTransparency = 1
-close.MouseButton1Click:Connect(function() screenGui:Destroy() end)
+local function newPage(id)
+    local scroll = Instance.new("ScrollingFrame")
+    scroll.Name               = id
+    scroll.Size               = UDim2.new(1, 0, 1, 0)
+    scroll.BackgroundTransparency = 1
+    scroll.BorderSizePixel    = 0
+    scroll.ScrollBarThickness = 3
+    scroll.ScrollBarImageColor3 = Color3.fromRGB(90,60,200)
+    scroll.CanvasSize         = UDim2.new(0,0,0,0)
+    scroll.AutomaticCanvasSize = Enum.AutomaticSize.Y
+    scroll.Visible            = false
+    scroll.Parent             = ContentHolder
+    listLayout(scroll, 10)
+    pad(scroll, 14, 14, 14, 14)
+    Pages[id] = scroll
+    return scroll
+end
 
-sgui:SetCore("SendNotification", {Title = "NurHub V3 Loaded ✅", Text = "YouTube: Nural1k", Icon = myIcon, Duration = 5})
-task.delay(3, function()
-    sgui:SetCore("SendNotification", {Title = "Welcome, Nurali! 🗿", Text = "Удачного фарма!", Icon = myIcon, Duration = 5})
-end)
+local function newSection(parent, title)
+    local sec = Instance.new("Frame")
+    sec.Size             = UDim2.new(1, 0, 0, 0)
+    sec.AutomaticSize    = Enum.AutomaticSize.Y
+    sec.BackgroundColor3 = Color3.fromRGB(22, 22, 28)
+    sec.BorderSizePixel  = 0
+    sec.Parent           = parent
+    corner(10, sec)
+    stroke(Color3.fromRGB(40,40,55), 1, sec)
+
+    local hdr = Instance.new("TextLabel")
+    hdr.Size               = UDim2.new(1, 0, 0, 30)
+    hdr.BackgroundColor3   = Color3.fromRGB(28, 24, 42)
+    hdr.BorderSizePixel    = 0
+    hdr.Text               = "  " .. title
+    hdr.TextColor3         = Color3.fromRGB(170, 140, 255)
+    hdr.TextXAlignment     = Enum.TextXAlignment.Left
+    hdr.TextScaled         = true
+    hdr.Font               = Enum.Font.GothamSemibold
+    hdr.Parent             = sec
+    corner(10, hdr)
+
+    -- bottom-corner fix for header
+    local hdrFix = Instance.new("Frame")
+    hdrFix.Size             = UDim2.new(1, 0, 0, 10)
+    hdrFix.Position         = UDim2.new(0, 0, 1, -10)
+    hdrFix.BackgroundColor3 = Color3.fromRGB(28, 24, 42)
+    hdrFix.BorderSizePixel  = 0
+    hdrFix.Parent           = hdr
+
+    local body = Instance.new("Frame")
+    body.Size            = UDim2.new(1, 0, 0, 0)
+    body.AutomaticSize   = Enum.AutomaticSize.Y
+    body.BackgroundTransparency = 1
+    body.Parent          = sec
+    listLayout(body, 6)
+    pad(body, 8, 10, 10, 10)
+
+    -- UIListLayout for section itself
+    local sl = Instance.new("UIListLayout")
+    sl.FillDirection = Enum.FillDirection.Vertical
+    sl.Padding       = UDim.new(0,0)
+    sl.SortOrder     = Enum.SortOrder.LayoutOrder
+    sl.Parent        = sec
+    hdr.LayoutOrder  = 0
+    body.LayoutOrder = 1
+
+    return body
+end
+
+local ACCENT   = Color3.fromRGB(90, 55, 210)
+local ACCENT2  = Color3.fromRGB(50, 130, 80)
+local DANGER   = Color3.fromRGB(170, 40, 55)
+local NEUTRAL  = Color3.fromRGB(38, 38, 52)
+
+local function newButton(parent, text, color, cb, lo)
+    color = color or ACCENT
+    local btn = Instance.new("TextButton")
+    btn.Size             = UDim2.new(1, 0, 0, 34)
+    btn.BackgroundColor3 = color
+    btn.BorderSizePixel  = 0
+    btn.Text             = text
+    btn.TextColor3       = Color3.fromRGB(255,255,255)
+    btn.TextScaled       = true
+    btn.Font             = Enum.Font.GothamSemibold
+    btn.LayoutOrder      = lo or 0
+    btn.AutoButtonColor  = false
+    btn.Parent           = parent
+    corner(8, btn)
+
+    btn.MouseEnter:Connect(function()
+        tween(btn, 0.15, {BackgroundColor3 = color:Lerp(Color3.new(1,1,1), 0.18)})
+    end)
+    btn.MouseLeave:Connect(function()
+        tween(btn, 0.15, {BackgroundColor3 = color})
+    end)
+    btn.MouseButton1Click:Connect(function()
+        tween(btn, 0.07, {BackgroundColor3 = color:Lerp(Color3.new(0,0,0), 0.25)})
+        task.delay(0.07, function() tween(btn, 0.1, {BackgroundColor3 = color}) end)
+        pcall(cb)
+    end)
+    return btn
+end
+
+local function newTextBox(parent, placeholder, default, cb, lo)
+    local container = Instance.new("Frame")
+    container.Size             = UDim2.new(1, 0, 0, 34)
+    container.BackgroundColor3 = NEUTRAL
+    container.BorderSizePixel  = 0
+    container.LayoutOrder      = lo or 0
+    container.Parent           = parent
+    corner(8, container)
+    stroke(Color3.fromRGB(55,55,75), 1, container)
+
+    local tb = Instance.new("TextBox")
+    tb.Size               = UDim2.new(1, -16, 1, 0)
+    tb.Position           = UDim2.new(0, 8, 0, 0)
+    tb.BackgroundTransparency = 1
+    tb.PlaceholderText    = placeholder or ""
+    tb.PlaceholderColor3  = Color3.fromRGB(100,100,120)
+    tb.Text               = tostring(default or "")
+    tb.TextColor3         = Color3.fromRGB(220,220,240)
+    tb.TextScaled         = true
+    tb.Font               = Enum.Font.Gotham
+    tb.ClearTextOnFocus   = false
+    tb.Parent             = container
+
+    tb.FocusLost:Connect(function()
+        pcall(cb, tb.Text)
+    end)
+    return tb
+end
+
+local function newToggle(parent, text, key, cb, lo)
+    local row = Instance.new("Frame")
+    row.Size             = UDim2.new(1, 0, 0, 36)
+    row.BackgroundColor3 = NEUTRAL
+    row.BorderSizePixel  = 0
+    row.LayoutOrder      = lo or 0
+    row.Parent           = parent
+    corner(8, row)
+
+    local lbl = Instance.new("TextLabel")
+    lbl.Size               = UDim2.new(1, -68, 1, 0)
+    lbl.Position           = UDim2.new(0, 12, 0, 0)
+    lbl.BackgroundTransparency = 1
+    lbl.Text               = text
+    lbl.TextColor3         = Color3.fromRGB(200,200,220)
+    lbl.TextXAlignment     = Enum.TextXAlignment.Left
+    lbl.TextScaled         = true
+    lbl.Font               = Enum.Font.Gotham
+    lbl.Parent             = row
+
+    -- pill track
+    local track = Instance.new("TextButton")
+    track.Size             = UDim2.new(0, 46, 0, 24)
+    track.Position         = UDim2.new(1, -56, 0.5, -12)
+    track.BackgroundColor3 = Color3.fromRGB(50,50,65)
+    track.BorderSizePixel  = 0
+    track.Text             = ""
+    track.AutoButtonColor  = false
+    track.Parent           = row
+    corner(12, track)
+
+    local knob = Instance.new("Frame")
+    knob.Size             = UDim2.new(0, 18, 0, 18)
+    knob.Position         = UDim2.new(0, 3, 0.5, -9)
+    knob.BackgroundColor3 = Color3.fromRGB(160,160,180)
+    knob.BorderSizePixel  = 0
+    knob.Parent           = track
+    corner(9, knob)
+
+    local function refresh()
+        local on = State[key]
+        tween(track, 0.2, {BackgroundColor3 = on and ACCENT2 or Color3.fromRGB(50,50,65)})
+        tween(knob,  0.2, {Position
