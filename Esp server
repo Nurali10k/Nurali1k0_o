@@ -1,0 +1,398 @@
+
+-- Проверка наличия библиотеки Rayfield и её загрузка
+local Rayfield = loadstring(game:HttpGet('https://sirius.menu/rayfield'))()
+
+-- Проверка на успешную загрузку библиотеки для избежания ошибок
+if not Rayfield then
+    game:GetService("StarterGui"):SetCore("SendNotification", {
+        Title = "Ошибка",
+        Text = "Не удалось загрузить Rayfield Library",
+        Duration = 5
+    })
+    return
+end
+
+-- --- Инициализация основных сервисов ---
+local Players = game:GetService("Players")
+local LocalPlayer = Players.LocalPlayer
+local RunService = game:GetService("RunService")
+local TweenService = game:GetService("TweenService")
+local Camera = workspace.CurrentCamera
+
+-- --- Глобальные переменные для состояния скрипта ---
+local currentSpectateTarget = nil        -- Текущий игрок за которым следим
+local spectateConnection = nil            -- Соединение для RenderStepped
+local originalCameraType = nil            -- Оригинальный тип камеры
+local originalCameraCFrame = nil          -- Оригинальная позиция камеры
+
+-- --- Функция для безопасного копирования текста (JobId) ---
+local function copyToClipboard(text)
+    -- Для мобильных исполнителей часто требуется setclipboard или toclipboard
+    if setclipboard then
+        setclipboard(text)
+    elseif toclipboard then
+        toclipboard(text)
+    else
+        -- Если функции нет, используем GUI нотификацию
+        game:GetService("StarterGui"):SetCore("SendNotification", {
+            Title = "Ошибка",
+            Text = "Ваш исполнитель не поддерживает копирование в буфер",
+            Duration = 3
+        })
+        return
+    end
+    
+    game:GetService("StarterGui"):SetCore("SendNotification", {
+        Title = "Скопировано",
+        Text = "JobId: " .. text,
+        Duration = 2
+    })
+end
+
+-- --- Функция обновления информации в UI (Server Tab) ---
+-- Разделяем обновление, чтобы не нагружать рендер основного интерфейса
+local function updateServerInfo()
+    -- Блокировка ошибок на случай, если элементы UI еще не созданы
+    pcall(function()
+        -- Получаем текущие значения
+        local jobId = game.JobId or "Not in game"
+        local playerCount = #Players:GetPlayers()
+        local maxPlayers = Players.MaxPlayers
+        -- Получаем пинг через GetNetworkPing() [citation:8]
+        local ping = math.floor(LocalPlayer:GetNetworkPing() * 1000) .. " ms"
+        
+        -- Обновляем текстовые метки в UI
+        -- Используем флаги, чтобы обратиться к элементам интерфейса
+        Rayfield:SetElementFlagValue("Server_JobId", jobId)
+        Rayfield:SetElementFlagValue("Server_Players", playerCount .. " / " .. maxPlayers)
+        Rayfield:SetElementFlagValue("Server_Ping", ping)
+    end)
+end
+
+-- --- Логика обновления списка игроков (Dropdown) ---
+local function refreshPlayersDropdown()
+    local playerList = {}
+    -- Собираем имена всех игроков на сервере
+    for _, player in ipairs(Players:GetPlayers()) do
+        table.insert(playerList, player.Name)
+    end
+    
+    -- Обновляем опции в Dropdown [citation:1]
+    Rayfield:SetElementFlagValue("Players_Dropdown", {
+        Options = playerList,
+        CurrentOption = {playerList[1]} -- Ставим первого игрока по умолчанию
+    })
+end
+
+-- --- Вывод информации об игроке в консоль и UI ---
+local function displayPlayerInfo(playerName)
+    local player = Players:FindFirstChild(playerName)
+    if not player then return end
+    
+    -- Получаем данные игрока [citation:8]
+    local accountAge = player.AccountAge          -- Возраст аккаунта (дней)
+    local displayName = player.DisplayName        -- Отображаемое имя
+    local team = player.Team                      -- Команда (может быть nil)
+    local teamName = team and team.Name or "Нет команды"
+    
+    -- Формируем строку для вывода в консоль
+    local infoString = string.format(
+        "=== Информация об игроке: %s ===\n" ..
+        "Отображаемое имя: %s\n" ..
+        "Возраст аккаунта: %d дней\n" ..
+        "Команда: %s\n" ..
+        "==============================",
+        playerName, displayName, accountAge, teamName
+    )
+    
+    print(info_string) -- Вывод в консоль исполнителя
+    
+    -- Дополнительно выводим в отдельное текстовое поле в UI (если требуется)
+    -- Создаем нотификацию для быстрого просмотра на мобильных устройствах
+    game:GetService("StarterGui"):SetCore("SendNotification", {
+        Title = "Инфо: " .. playerName,
+        Text = "Возраст: " .. accountAge .. " дн. | Команда: " .. teamName,
+        Duration = 4
+    })
+    
+    -- Если есть текстовое поле в UI, обновляем и его (флаг Player_Info_Text)
+    pcall(function()
+        Rayfield:SetElementFlagValue("Player_Info_Text", infoString)
+    end)
+end
+
+-- --- Функция Остановки спекта (возврат камеры) ---
+local function stopSpectate()
+    if spectateConnection then
+        spectateConnection:Disconnect()
+        spectateConnection = nil
+    end
+    
+    if currentSpectateTarget then
+        currentSpectateTarget = nil
+        -- Возвращаем камеру в обычный режим
+        if originalCameraType then
+            Camera.CameraType = originalCameraType
+        else
+            Camera.CameraType = Enum.CameraType.Custom
+        end
+        Camera.CFrame = originalCameraCFrame or CFrame.new()
+        
+        -- Сообщаем пользователю об остановке
+        game:GetService("StarterGui"):SetCore("SendNotification", {
+            Title = "Spectate",
+            Text = "Слежение остановлено. Камера возвращена.",
+            Duration = 2
+        })
+    end
+end
+
+-- --- Функция Запуска спекта за выбранным игроком ---
+local function startSpectate(targetPlayer)
+    -- Проверка валидности игрока и его персонажа
+    if not targetPlayer or not targetPlayer.Character or not targetPlayer.Character:FindFirstChild("HumanoidRootPart") then
+        game:GetService("StarterGui"):SetCore("SendNotification", {
+            Title = "Ошибка",
+            Text = "Игрок не найден или персонаж не загружен",
+            Duration = 2
+        })
+        return false
+    end
+    
+    -- Останавливаем текущий спект, если он был
+    if currentSpectateTarget then
+        stopSpectate()
+    end
+    
+    -- Сохраняем настройки камеры до спекта
+    originalCameraType = Camera.CameraType
+    originalCameraCFrame = Camera.CFrame
+    
+    -- Делаем камеру управляемой скриптом
+    Camera.CameraType = Enum.CameraType.Scriptable
+    
+    currentSpectateTarget = targetPlayer
+    
+    -- Плавное следование камеры (Lerp / Tween) для производительности [citation:3]
+    -- Используем RenderStepped для максимальной плавности, но ограничиваем обновления через Tween
+    local lastCFrame = nil
+    
+    spectateConnection = RunService.RenderStepped:Connect(function(deltaTime)
+        if not currentSpectateTarget then return end
+        
+        -- Проверяем, существует ли персонаж игрока
+        local character = currentSpectateTarget.Character
+        if not character then return end
+        
+        local rootPart = character:FindFirstChild("HumanoidRootPart")
+        if not rootPart then return end
+        
+        -- Позиция, на которую должна смотреть камера (чуть выше головы игрока)
+        local targetCFrame = rootPart.CFrame + rootPart.CFrame.UpVector * 2
+        
+        -- Используем Tween для плавности, чтобы избежать рывков на слабых устройствах [citation:3]
+        -- Для оптимизации: не создаем твин каждый кадр, а обновляем через CFrame:Lerp
+        -- Это более производительно, чем постоянное создание объектов Tween
+        
+        if not lastCFrame then
+            Camera.CFrame = targetCFrame
+        else
+            -- Линейная интерполяция для плавности (скорость 0.2)
+            Camera.CFrame = Camera.CFrame:Lerp(targetCFrame, 0.2)
+        end
+        lastCFrame = targetCFrame
+    end)
+    
+    game:GetService("StarterGui"):SetCore("SendNotification", {
+        Title = "Spectate",
+        Text = "Слежение за: " .. targetPlayer.Name,
+        Duration = 2
+    })
+    
+    return true
+end
+
+-- --- Инициализация Rayfield Window ---
+local Window = Rayfield:CreateWindow({
+    Name = "Mobile Admin Hub",
+    Icon = 0, -- 0 = нет иконки (экономия памяти на мобилке)
+    LoadingTitle = "Загрузка хаба",
+    LoadingSubtitle = "Оптимизировано для мобильных устройств",
+    Theme = "Default",
+    ToggleUIKeybind = "K", -- Кнопка скрытия/показа UI
+    
+    ConfigurationSaving = {
+        Enabled = false -- Отключаем сохранение настроек для мобильных устройств (меньше операций ввода-вывода)
+    },
+    
+    KeySystem = false -- Ключи не требуются
+})
+
+-- --- ВКЛАДКА "SERVER" ---
+local ServerTab = Window:CreateTab("Server", nil)
+
+-- Секция информации о сервере
+local InfoSection = ServerTab:CreateSection("Информация о сервере")
+
+-- Текстовые поля (Read-only)
+ServerTab:CreateLabel("Job ID:", nil)
+ServerTab:CreateParagraph({
+    Name = "JobId",
+    Flag = "Server_JobId",
+    Value = "Загрузка..."
+})
+
+ServerTab:CreateLabel("Игроки:", nil)
+ServerTab:CreateParagraph({
+    Name = "PlayersCount",
+    Flag = "Server_Players",
+    Value = "0 / 0"
+})
+
+ServerTab:CreateLabel("Пинг (мс):", nil)
+ServerTab:CreateParagraph({
+    Name = "Ping",
+    Flag = "Server_Ping",
+    Value = "0 ms"
+})
+
+-- Кнопка копирования JobId
+ServerTab:CreateButton({
+    Name = "Копировать JobId",
+    Flag = "CopyJobIdButton",
+    Callback = function()
+        copyToClipboard(game.JobId or "Ошибка получения JobId")
+    end,
+})
+
+-- --- ВКЛАДКА "PLAYERS" ---
+local PlayersTab = Window:CreateTab("Players", nil)
+
+-- Секция управления игроками
+local ControlSection = PlayersTab:CreateSection("Управление")
+
+-- Кнопка обновления списка (на случай, если автообновление отключено или не сработало)
+PlayersTab:CreateButton({
+    Name = "Обновить список игроков",
+    Flag = "RefreshPlayersButton",
+    Callback = function()
+        refreshPlayersDropdown()
+        game:GetService("StarterGui"):SetCore("SendNotification", {
+            Title = "Список",
+            Text = "Список игроков обновлен",
+            Duration = 1
+        })
+    end,
+})
+
+-- Выпадающий список игроков [citation:1]
+PlayersTab:CreateDropdown({
+    Name = "Выберите игрока",
+    Flag = "Players_Dropdown",
+    Options = { "Загрузка..." },
+    CurrentOption = { "Загрузка..." },
+    MultipleOptions = false,
+    Callback = function(selectedOption)
+        -- Когда пользователь выбирает игрока из списка
+        if selectedOption and #selectedOption > 0 then
+            local playerName = selectedOption[1]
+            -- Автоматически показываем информацию при выборе (как в задании)
+            displayPlayerInfo(playerName)
+            
+            -- Если спект активен и мы выбрали другого игрока, можно обновить цель
+            -- (но по заданию: спект включается отдельным Toggle)
+        end
+    end,
+})
+
+-- Текстовое поле для вывода подробной информации об игроке (опционально)
+PlayersTab:CreateParagraph({
+    Name = "Информация об игроке",
+    Flag = "Player_Info_Text",
+    Value = "Выберите игрока из списка..."
+})
+
+-- Toggle для включения/выключения Spectate
+local spectateToggle = nil
+spectateToggle = PlayersTab:CreateToggle({
+    Name = "Spectate",
+    Flag = "SpectateToggle",
+    CurrentValue = false,
+    Callback = function(isEnabled)
+        if isEnabled then
+            -- Включаем спект: берем выбранного игрока из Dropdown
+            local dropdownValue = Rayfield:GetElementFlagValue("Players_Dropdown")
+            if dropdownValue and #dropdownValue > 0 then
+                local targetPlayerName = dropdownValue[1]
+                local targetPlayer = Players:FindFirstChild(targetPlayerName)
+                if targetPlayer then
+                    startSpectate(targetPlayer)
+                else
+                    game:GetService("StarterGui"):SetCore("SendNotification", {
+                        Title = "Ошибка",
+                        Text = "Игрок не найден. Обновите список.",
+                        Duration = 2
+                    })
+                    spectateToggle:Set(false) -- Отключаем тумблер обратно
+                end
+            else
+                game:GetService("StarterGui"):SetCore("SendNotification", {
+                    Title = "Ошибка",
+                    Text = "Сначала выберите игрока из списка",
+                    Duration = 2
+                })
+                spectateToggle:Set(false) -- Отключаем тумблер обратно
+            end
+        else
+            -- Выключаем спект
+            stopSpectate()
+        end
+    end,
+})
+
+-- --- ЗАПУСК ФОНОВЫХ ПРОЦЕССОВ (ОПТИМИЗИРОВАННО) ---
+
+-- 1. Автообновление информации о сервере (каждые 2 секунды)
+-- Используем task.wait() вместо wait() [citation:3]
+task.spawn(function()
+    while task.wait(2) do -- Обновление раз в 2 секунды для экономии ресурсов
+        updateServerInfo()
+    end
+end)
+
+-- 2. Автообновление списка игроков (каждые 5 секунд)
+-- Это помогает, если кто-то зашел/вышел, не перегружая скрипт
+task.spawn(function()
+    while task.wait(5) do
+        refreshPlayersDropdown()
+    end
+end)
+
+-- 3. Первоначальный запуск обновлений
+task.wait(0.5) -- Даем время на отрисовку UI
+updateServerInfo()
+refreshPlayersDropdown()
+
+-- Обработка выхода игрока из игры (очистка спекта, чтобы избежать ошибок)
+Players.PlayerRemoving:Connect(function(playerLeaving)
+    if currentSpectateTarget == playerLeaving then
+        -- Если игрок, за которым следим, вышел — выключаем спект
+        if spectateToggle then
+            spectateToggle:Set(false)
+        else
+            stopSpectate()
+        end
+        
+        game:GetService("StarterGui"):SetCore("SendNotification", {
+            Title = "Spectate",
+            Text = "Игрок покинул сервер. Слежение остановлено.",
+            Duration = 3
+        })
+    end
+    -- Обновляем список, так как игрок ушел
+    refreshPlayersDropdown()
+end)
+
+-- Персонализированное приветствие в консоль
+print("Скрипт успешно загружен. UI запущен. Нажмите 'K' для скрытия/показа окна.")
+```
