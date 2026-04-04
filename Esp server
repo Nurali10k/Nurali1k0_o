@@ -1,28 +1,19 @@
 --[[
-    Script: Mobile Hub v6.0 (No External Libraries)
-    Executor: Delta / Fluxus (Mobile)
-    Описание: Полностью свой GUI, без Rayfield/Orion
+    Mobile Hub v7.0
+    - Удобный интерфейс с вкладками
+    - Кнопки X (полное закрытие) и - (сворачивание в иконку)
+    - Перетаскивание окна
+    - Исправлено пропадание GUI
+    - Оптимизировано для мобильных устройств
 --]]
 
--- === ЗАЩИТА ОТ ДВОЙНОЙ ЗАГРУЗКИ ===
 if _G.MobileHubLoaded then
-    game:GetService("StarterGui"):SetCore("SendNotification", {
-        Title = "Error",
-        Text = "Mobile Hub already running",
-        Duration = 3
-    })
+    game:GetService("StarterGui"):SetCore("SendNotification", {Title = "Error", Text = "Mobile Hub already running", Duration = 3})
     return
 end
 _G.MobileHubLoaded = true
 
--- === КОНФИГ ===
-local CONFIG = {
-    CAMERA_OFFSET = 2.5,
-    CAMERA_LERP_SPEED = 0.25,
-    NOTIFICATION_DURATION = 3
-}
-
--- === СЕРВИСЫ ===
+-- СЕРВИСЫ
 local Players = game:GetService("Players")
 local LocalPlayer = Players.LocalPlayer
 local RunService = game:GetService("RunService")
@@ -30,437 +21,33 @@ local Camera = workspace.CurrentCamera
 local UserInputService = game:GetService("UserInputService")
 local TweenService = game:GetService("TweenService")
 
--- === ПЕРЕМЕННЫЕ ===
+-- ПЕРЕМЕННЫЕ
 local currentSpectateTarget = nil
 local spectateConnection = nil
 local originalCameraType = nil
 local originalCameraCFrame = nil
 local isSpectating = false
-local guiEnabled = true
+local guiMinimized = false   -- свернуто ли в иконку
+local minimizedIcon = nil     -- иконка в свернутом состоянии
+local mainFrame = nil
 
--- === УТИЛИТЫ ===
+-- ВСПОМОГАТЕЛЬНЫЕ ФУНКЦИИ
 local function notify(title, text, duration)
-    duration = duration or CONFIG.NOTIFICATION_DURATION
+    duration = duration or 3
     pcall(function()
-        game:GetService("StarterGui"):SetCore("SendNotification", {
-            Title = title,
-            Text = text,
-            Duration = duration
-        })
+        game:GetService("StarterGui"):SetCore("SendNotification", {Title = title, Text = text, Duration = duration})
     end)
 end
 
-local function log(msg)
-    print("[MobileHub] " .. msg)
-end
+local function log(msg) print("[MobileHub] " .. msg) end
 
--- === СОЗДАНИЕ GUI ===
-local screenGui = Instance.new("ScreenGui")
-screenGui.Name = "MobileHubGUI"
-screenGui.Parent = game:GetService("CoreGui")
-screenGui.ResetOnSpawn = false
-
--- Главное окно
-local mainFrame = Instance.new("Frame")
-mainFrame.Size = UDim2.new(0, 320, 0, 480)
-mainFrame.Position = UDim2.new(0.5, -160, 0.5, -240)
-mainFrame.BackgroundColor3 = Color3.fromRGB(25, 25, 35)
-mainFrame.BackgroundTransparency = 0.05
-mainFrame.BorderSizePixel = 0
-mainFrame.ClipsDescendants = true
-mainFrame.Parent = screenGui
-
--- Скругление углов
-local corners = Instance.new("UICorner")
-corners.CornerRadius = UDim.new(0, 12)
-corners.Parent = mainFrame
-
--- Заголовок
-local titleBar = Instance.new("Frame")
-titleBar.Size = UDim2.new(1, 0, 0, 40)
-titleBar.BackgroundColor3 = Color3.fromRGB(35, 35, 45)
-titleBar.BorderSizePixel = 0
-titleBar.Parent = mainFrame
-
-local titleCorners = Instance.new("UICorner")
-titleCorners.CornerRadius = UDim.new(0, 12)
-titleCorners.Parent = titleBar
-
-local titleLabel = Instance.new("TextLabel")
-titleLabel.Size = UDim2.new(1, 0, 1, 0)
-titleLabel.BackgroundTransparency = 1
-titleLabel.Text = "⚡ Mobile Hub v6.0"
-titleLabel.TextColor3 = Color3.fromRGB(255, 255, 255)
-titleLabel.TextSize = 18
-titleLabel.Font = Enum.Font.GothamBold
-titleLabel.TextXAlignment = Enum.TextXAlignment.Center
-titleLabel.Parent = titleBar
-
--- Кнопка закрытия
-local closeBtn = Instance.new("TextButton")
-closeBtn.Size = UDim2.new(0, 40, 1, 0)
-closeBtn.Position = UDim2.new(1, -40, 0, 0)
-closeBtn.BackgroundTransparency = 1
-closeBtn.Text = "✕"
-closeBtn.TextColor3 = Color3.fromRGB(255, 100, 100)
-closeBtn.TextSize = 20
-closeBtn.Font = Enum.Font.GothamBold
-closeBtn.Parent = titleBar
-
-closeBtn.MouseButton1Click:Connect(function()
-    mainFrame.Visible = false
-    guiEnabled = false
-    notify("GUI", "Menu hidden. Press K to show", 2)
-end)
-
--- Табы (кнопки переключения)
-local tabBar = Instance.new("Frame")
-tabBar.Size = UDim2.new(1, 0, 0, 45)
-tabBar.Position = UDim2.new(0, 0, 0, 40)
-tabBar.BackgroundColor3 = Color3.fromRGB(30, 30, 40)
-tabBar.BorderSizePixel = 0
-tabBar.Parent = mainFrame
-
-local serverTabBtn = Instance.new("TextButton")
-serverTabBtn.Size = UDim2.new(0.5, 0, 1, 0)
-serverTabBtn.BackgroundTransparency = 1
-serverTabBtn.Text = "🌐 Server"
-serverTabBtn.TextColor3 = Color3.fromRGB(255, 255, 255)
-serverTabBtn.TextSize = 16
-serverTabBtn.Font = Enum.Font.GothamSemibold
-serverTabBtn.Parent = tabBar
-
-local playersTabBtn = Instance.new("TextButton")
-playersTabBtn.Size = UDim2.new(0.5, 0, 1, 0)
-playersTabBtn.Position = UDim2.new(0.5, 0, 0, 0)
-playersTabBtn.BackgroundTransparency = 1
-playersTabBtn.Text = "👥 Players"
-playersTabBtn.TextColor3 = Color3.fromRGB(200, 200, 200)
-playersTabBtn.TextSize = 16
-playersTabBtn.Font = Enum.Font.GothamSemibold
-playersTabBtn.Parent = tabBar
-
--- Контент для вкладок
-local serverContent = Instance.new("ScrollingFrame")
-serverContent.Size = UDim2.new(1, 0, 1, -85)
-serverContent.Position = UDim2.new(0, 0, 0, 85)
-serverContent.BackgroundTransparency = 1
-serverContent.ScrollBarThickness = 4
-serverContent.CanvasSize = UDim2.new(0, 0, 0, 200)
-serverContent.Parent = mainFrame
-
-local playersContent = Instance.new("ScrollingFrame")
-playersContent.Size = UDim2.new(1, 0, 1, -85)
-playersContent.Position = UDim2.new(0, 0, 0, 85)
-playersContent.BackgroundTransparency = 1
-playersContent.ScrollBarThickness = 4
-playersContent.CanvasSize = UDim2.new(0, 0, 0, 400)
-playersContent.Visible = false
-playersContent.Parent = mainFrame
-
--- === ФУНКЦИЯ СОЗДАНИЯ ЭЛЕМЕНТОВ ===
-local function createLabel(parent, text, yPos)
-    local label = Instance.new("TextLabel")
-    label.Size = UDim2.new(1, -20, 0, 30)
-    label.Position = UDim2.new(0, 10, 0, yPos)
-    label.BackgroundColor3 = Color3.fromRGB(40, 40, 50)
-    label.BackgroundTransparency = 0.3
-    label.Text = text
-    label.TextColor3 = Color3.fromRGB(220, 220, 220)
-    label.TextSize = 14
-    label.Font = Enum.Font.Gotham
-    label.TextXAlignment = Enum.TextXAlignment.Left
-    label.TextTruncate = Enum.TextTruncate.AtEnd
-    label.Parent = parent
-    
-    local labelCorners = Instance.new("UICorner")
-    labelCorners.CornerRadius = UDim.new(0, 6)
-    labelCorners.Parent = label
-    
-    return label
-end
-
-local function createButton(parent, text, yPos, callback)
-    local btn = Instance.new("TextButton")
-    btn.Size = UDim2.new(1, -20, 0, 40)
-    btn.Position = UDim2.new(0, 10, 0, yPos)
-    btn.BackgroundColor3 = Color3.fromRGB(70, 70, 90)
-    btn.Text = text
-    btn.TextColor3 = Color3.fromRGB(255, 255, 255)
-    btn.TextSize = 15
-    btn.Font = Enum.Font.GothamSemibold
-    btn.Parent = parent
-    
-    local btnCorners = Instance.new("UICorner")
-    btnCorners.CornerRadius = UDim.new(0, 8)
-    btnCorners.Parent = btn
-    
-    btn.MouseButton1Click:Connect(callback)
-    return btn
-end
-
-local function createDropdown(parent, items, yPos, callback)
-    local dropdownFrame = Instance.new("Frame")
-    dropdownFrame.Size = UDim2.new(1, -20, 0, 40)
-    dropdownFrame.Position = UDim2.new(0, 10, 0, yPos)
-    dropdownFrame.BackgroundColor3 = Color3.fromRGB(45, 45, 55)
-    dropdownFrame.Parent = parent
-    
-    local dropdownCorners = Instance.new("UICorner")
-    dropdownCorners.CornerRadius = UDim.new(0, 8)
-    dropdownCorners.Parent = dropdownFrame
-    
-    local selectedLabel = Instance.new("TextLabel")
-    selectedLabel.Size = UDim2.new(1, -30, 1, 0)
-    selectedLabel.BackgroundTransparency = 1
-    selectedLabel.Text = items[1] or "No players"
-    selectedLabel.TextColor3 = Color3.fromRGB(255, 255, 255)
-    selectedLabel.TextSize = 14
-    selectedLabel.Font = Enum.Font.Gotham
-    selectedLabel.TextXAlignment = Enum.TextXAlignment.Left
-    selectedLabel.Parent = dropdownFrame
-    
-    local arrow = Instance.new("TextLabel")
-    arrow.Size = UDim2.new(0, 30, 1, 0)
-    arrow.Position = UDim2.new(1, -30, 0, 0)
-    arrow.BackgroundTransparency = 1
-    arrow.Text = "▼"
-    arrow.TextColor3 = Color3.fromRGB(200, 200, 200)
-    arrow.TextSize = 14
-    arrow.Parent = dropdownFrame
-    
-    local dropdownList = Instance.new("Frame")
-    dropdownList.Size = UDim2.new(1, 0, 0, 0)
-    dropdownList.Position = UDim2.new(0, 0, 1, 0)
-    dropdownList.BackgroundColor3 = Color3.fromRGB(35, 35, 45)
-    dropdownList.Visible = false
-    dropdownList.ClipsDescendants = true
-    dropdownList.Parent = dropdownFrame
-    
-    local listCorners = Instance.new("UICorner")
-    listCorners.CornerRadius = UDim.new(0, 8)
-    listCorners.Parent = dropdownList
-    
-    local listLayout = Instance.new("UIListLayout")
-    listLayout.Padding = UDim.new(0, 2)
-    listLayout.Parent = dropdownList
-    
-    local function updateList(newItems)
-        for _, child in ipairs(dropdownList:GetChildren()) do
-            if child:IsA("TextButton") then
-                child:Destroy()
-            end
-        end
-        
-        for i, item in ipairs(newItems) do
-            local optionBtn = Instance.new("TextButton")
-            optionBtn.Size = UDim2.new(1, 0, 0, 35)
-            optionBtn.BackgroundColor3 = Color3.fromRGB(45, 45, 55)
-            optionBtn.Text = item
-            optionBtn.TextColor3 = Color3.fromRGB(255, 255, 255)
-            optionBtn.TextSize = 13
-            optionBtn.Font = Enum.Font.Gotham
-            optionBtn.Parent = dropdownList
-            
-            optionBtn.MouseButton1Click:Connect(function()
-                selectedLabel.Text = item
-                dropdownList.Visible = false
-                dropdownFrame.Size = UDim2.new(1, -20, 0, 40)
-                callback(item)
-            end)
-        end
-        
-        dropdownList.CanvasSize = UDim2.new(0, 0, 0, #newItems * 37)
-    end
-    
-    dropdownFrame.MouseButton1Click:Connect(function()
-        if dropdownList.Visible then
-            dropdownList.Visible = false
-            dropdownFrame.Size = UDim2.new(1, -20, 0, 40)
-        else
-            dropdownList.Visible = true
-            dropdownFrame.Size = UDim2.new(1, -20, 0, 40 + math.min(#items * 37, 200))
-        end
-    end)
-    
-    updateList(items)
-    
-    return {
-        update = updateList,
-        getValue = function() return selectedLabel.Text end
-    }
-end
-
-local function createToggle(parent, text, yPos, callback)
-    local toggleFrame = Instance.new("Frame")
-    toggleFrame.Size = UDim2.new(1, -20, 0, 40)
-    toggleFrame.Position = UDim2.new(0, 10, 0, yPos)
-    toggleFrame.BackgroundColor3 = Color3.fromRGB(45, 45, 55)
-    toggleFrame.Parent = parent
-    
-    local toggleCorners = Instance.new("UICorner")
-    toggleCorners.CornerRadius = UDim.new(0, 8)
-    toggleCorners.Parent = toggleFrame
-    
-    local label = Instance.new("TextLabel")
-    label.Size = UDim2.new(1, -50, 1, 0)
-    label.BackgroundTransparency = 1
-    label.Text = text
-    label.TextColor3 = Color3.fromRGB(255, 255, 255)
-    label.TextSize = 14
-    label.Font = Enum.Font.Gotham
-    label.TextXAlignment = Enum.TextXAlignment.Left
-    label.Parent = toggleFrame
-    
-    local toggleBtn = Instance.new("TextButton")
-    toggleBtn.Size = UDim2.new(0, 50, 0, 30)
-    toggleBtn.Position = UDim2.new(1, -55, 0.5, -15)
-    toggleBtn.BackgroundColor3 = Color3.fromRGB(100, 100, 120)
-    toggleBtn.Text = "OFF"
-    toggleBtn.TextColor3 = Color3.fromRGB(255, 255, 255)
-    toggleBtn.TextSize = 12
-    toggleBtn.Font = Enum.Font.GothamBold
-    toggleBtn.Parent = toggleFrame
-    
-    local btnCorners = Instance.new("UICorner")
-    btnCorners.CornerRadius = UDim.new(0, 15)
-    btnCorners.Parent = toggleBtn
-    
-    local state = false
-    
-    toggleBtn.MouseButton1Click:Connect(function()
-        state = not state
-        if state then
-            toggleBtn.BackgroundColor3 = Color3.fromRGB(76, 175, 80)
-            toggleBtn.Text = "ON"
-        else
-            toggleBtn.BackgroundColor3 = Color3.fromRGB(100, 100, 120)
-            toggleBtn.Text = "OFF"
-        end
-        callback(state)
-    end)
-    
-    return {
-        set = function(newState)
-            state = newState
-            if state then
-                toggleBtn.BackgroundColor3 = Color3.fromRGB(76, 175, 80)
-                toggleBtn.Text = "ON"
-            else
-                toggleBtn.BackgroundColor3 = Color3.fromRGB(100, 100, 120)
-                toggleBtn.Text = "OFF"
-            end
-        end
-    }
-end
-
--- === ПОСТРОЕНИЕ ВКЛАДКИ SERVER ===
-local yOffset = 10
-local jobIdLabel = createLabel(serverContent, "Job ID: Loading...", yOffset)
-yOffset = yOffset + 35
-local playersLabel = createLabel(serverContent, "Players: 0 / 0", yOffset)
-yOffset = yOffset + 35
-local pingLabel = createLabel(serverContent, "Ping: 0 ms", yOffset)
-yOffset = yOffset + 50
-createButton(serverContent, "📋 Copy Job ID", yOffset, function()
-    if setclipboard then
-        setclipboard(game.JobId or "No JobId")
-        notify("Copied", "Job ID copied!", 2)
-    else
-        notify("Error", "Copy not supported", 2)
-    end
-end)
-
--- === ПОСТРОЕНИЕ ВКЛАДКИ PLAYERS ===
-local dropdownY = 10
-local playersDropdown = nil
-local spectateToggle = nil
-
--- Кнопка обновления
-createButton(playersContent, "🔄 Refresh Players", dropdownY, function()
-    local names = {}
-    for _, p in ipairs(Players:GetPlayers()) do
-        table.insert(names, p.Name)
-    end
-    if #names == 0 then table.insert(names, "No players") end
-    playersDropdown.update(names)
-end)
-dropdownY = dropdownY + 50
-
--- Выпадающий список
-playersDropdown = createDropdown(playersContent, {"Loading..."}, dropdownY, function(selected)
-    local player = Players:FindFirstChild(selected)
-    if player then
-        local infoText = string.format(
-            "Name: %s\nDisplay: %s\nAccount Age: %d days\nTeam: %s",
-            player.Name,
-            player.DisplayName or player.Name,
-            player.AccountAge or 0,
-            (player.Team and player.Team.Name) or "No team"
-        )
-        print(infoText)
-        notify("Player Info", player.Name .. ": " .. (player.AccountAge or 0) .. " days", 3)
-    end
-end)
-dropdownY = dropdownY + 50
-
--- Информационное поле
-local infoFrame = Instance.new("Frame")
-infoFrame.Size = UDim2.new(1, -20, 0, 80)
-infoFrame.Position = UDim2.new(0, 10, 0, dropdownY)
-infoFrame.BackgroundColor3 = Color3.fromRGB(35, 35, 45)
-infoFrame.BackgroundTransparency = 0.5
-infoFrame.Parent = playersContent
-
-local infoCorners = Instance.new("UICorner")
-infoCorners.CornerRadius = UDim.new(0, 8)
-infoCorners.Parent = infoFrame
-
-local infoText = Instance.new("TextLabel")
-infoText.Size = UDim2.new(1, -10, 1, -10)
-infoText.Position = UDim2.new(0, 5, 0, 5)
-infoText.BackgroundTransparency = 1
-infoText.Text = "Select a player from the dropdown"
-infoText.TextColor3 = Color3.fromRGB(180, 180, 180)
-infoText.TextSize = 12
-infoText.Font = Enum.Font.Gotham
-infoText.TextWrapped = true
-infoText.Parent = infoFrame
-dropdownY = dropdownY + 90
-
--- Spectate toggle
-spectateToggle = createToggle(playersContent, "🔍 Spectate Mode", dropdownY, function(enabled)
-    if enabled then
-        local selectedName = playersDropdown.getValue()
-        local target = Players:FindFirstChild(selectedName)
-        if target and target ~= LocalPlayer then
-            startSpectate(target)
-        else
-            spectateToggle.set(false)
-            notify("Error", "Invalid player selected", 2)
-        end
-    else
-        stopSpectate()
-    end
-end)
-
--- === ФУНКЦИИ СПЕКТА ===
+-- ФУНКЦИИ СПЕКТА
 function stopSpectate()
-    if spectateConnection then
-        spectateConnection:Disconnect()
-        spectateConnection = nil
-    end
-    
+    if spectateConnection then spectateConnection:Disconnect() spectateConnection = nil end
     if isSpectating then
         isSpectating = false
-        if originalCameraType then
-            Camera.CameraType = originalCameraType
-        else
-            Camera.CameraType = Enum.CameraType.Custom
-        end
-        if originalCameraCFrame then
-            Camera.CFrame = originalCameraCFrame
-        end
+        if originalCameraType then Camera.CameraType = originalCameraType else Camera.CameraType = Enum.CameraType.Custom end
+        if originalCameraCFrame then Camera.CFrame = originalCameraCFrame end
         currentSpectateTarget = nil
         notify("Spectate", "Spectate stopped", 2)
     end
@@ -468,25 +55,18 @@ end
 
 function startSpectate(target)
     if isSpectating then stopSpectate() end
-    
     local character = target.Character
     if not character or not character:FindFirstChild("HumanoidRootPart") then
         notify("Error", "Character not loaded", 2)
         return false
     end
-    
     originalCameraType = Camera.CameraType
     originalCameraCFrame = Camera.CFrame
     Camera.CameraType = Enum.CameraType.Scriptable
-    
     currentSpectateTarget = target
     isSpectating = true
-    
     spectateConnection = RunService.RenderStepped:Connect(function()
-        if not isSpectating or not currentSpectateTarget then
-            stopSpectate()
-            return
-        end
+        if not isSpectating or not currentSpectateTarget then stopSpectate() return end
         local char = currentSpectateTarget.Character
         if not char then stopSpectate() return end
         local root = char:FindFirstChild("HumanoidRootPart")
@@ -494,59 +74,566 @@ function startSpectate(target)
         local targetCFrame = root.CFrame + root.CFrame.UpVector * 2.5
         Camera.CFrame = Camera.CFrame:Lerp(targetCFrame, 0.25)
     end)
-    
     notify("Spectate", "Spectating: " .. target.Name, 2)
     return true
 end
 
--- === ОБНОВЛЕНИЕ ИНФОРМАЦИИ ===
-local function updateServerInfo()
+-- СОЗДАНИЕ GUI
+local screenGui = Instance.new("ScreenGui")
+screenGui.Name = "MobileHubGUI"
+screenGui.ResetOnSpawn = false
+screenGui.Parent = game:GetService("CoreGui")
+
+-- === ОСНОВНОЕ ОКНО ===
+mainFrame = Instance.new("Frame")
+mainFrame.Size = UDim2.new(0, 360, 0, 520)
+mainFrame.Position = UDim2.new(0.5, -180, 0.5, -260)
+mainFrame.BackgroundColor3 = Color3.fromRGB(20, 20, 30)
+mainFrame.BackgroundTransparency = 0.1
+mainFrame.BorderSizePixel = 0
+mainFrame.ClipsDescendants = true
+mainFrame.Parent = screenGui
+-- Скругление
+local mainCorner = Instance.new("UICorner")
+mainCorner.CornerRadius = UDim.new(0, 12)
+mainCorner.Parent = mainFrame
+
+-- Возможность перетаскивания
+local dragging = false
+local dragStartPos, dragStartMouse
+
+mainFrame.InputBegan:Connect(function(input)
+    if input.UserInputType == Enum.UserInputType.Touch or input.UserInputType == Enum.UserInputType.MouseButton1 then
+        dragging = true
+        dragStartPos = mainFrame.Position
+        dragStartMouse = input.Position
+    end
+end)
+UserInputService.InputChanged:Connect(function(input)
+    if dragging and (input.UserInputType == Enum.UserInputType.Touch or input.UserInputType == Enum.UserInputType.MouseMovement) then
+        local delta = input.Position - dragStartMouse
+        mainFrame.Position = UDim2.new(dragStartPos.X.Scale, dragStartPos.X.Offset + delta.X, dragStartPos.Y.Scale, dragStartPos.Y.Offset + delta.Y)
+    end
+end)
+UserInputService.InputEnded:Connect(function(input)
+    if input.UserInputType == Enum.UserInputType.Touch or input.UserInputType == Enum.UserInputType.MouseButton1 then
+        dragging = false
+    end
+end)
+
+-- === ВЕРХНЯЯ ПАНЕЛЬ С КНОПКАМИ ===
+local titleBar = Instance.new("Frame")
+titleBar.Size = UDim2.new(1, 0, 0, 45)
+titleBar.BackgroundColor3 = Color3.fromRGB(35, 35, 45)
+titleBar.BorderSizePixel = 0
+titleBar.Parent = mainFrame
+local titleCorner = Instance.new("UICorner")
+titleCorner.CornerRadius = UDim.new(0, 12)
+titleCorner.Parent = titleBar
+
+local titleText = Instance.new("TextLabel")
+titleText.Size = UDim2.new(1, -100, 1, 0)
+titleText.Position = UDim2.new(0, 10, 0, 0)
+titleText.BackgroundTransparency = 1
+titleText.Text = "⚡ NURALI HUB v7.0"
+titleText.TextColor3 = Color3.fromRGB(255, 255, 255)
+titleText.TextSize = 18
+titleText.Font = Enum.Font.GothamBold
+titleText.TextXAlignment = Enum.TextXAlignment.Left
+titleText.Parent = titleBar
+
+-- Кнопка "-" (свернуть)
+local minimizeBtn = Instance.new("TextButton")
+minimizeBtn.Size = UDim2.new(0, 35, 1, 0)
+minimizeBtn.Position = UDim2.new(1, -70, 0, 0)
+minimizeBtn.BackgroundTransparency = 1
+minimizeBtn.Text = "−"
+minimizeBtn.TextColor3 = Color3.fromRGB(255, 255, 255)
+minimizeBtn.TextSize = 24
+minimizeBtn.Font = Enum.Font.GothamBold
+minimizeBtn.Parent = titleBar
+
+-- Кнопка "X" (полное закрытие)
+local closeBtn = Instance.new("TextButton")
+closeBtn.Size = UDim2.new(0, 35, 1, 0)
+closeBtn.Position = UDim2.new(1, -35, 0, 0)
+closeBtn.BackgroundTransparency = 1
+closeBtn.Text = "✕"
+closeBtn.TextColor3 = Color3.fromRGB(255, 100, 100)
+closeBtn.TextSize = 20
+closeBtn.Font = Enum.Font.GothamBold
+closeBtn.Parent = titleBar
+
+-- === ИКОНКА ДЛЯ СВЕРНУТОГО СОСТОЯНИЯ ===
+local function createMinimizedIcon()
+    local icon = Instance.new("Frame")
+    icon.Size = UDim2.new(0, 60, 0, 60)
+    icon.Position = UDim2.new(0, 20, 1, -80)
+    icon.BackgroundColor3 = Color3.fromRGB(35, 35, 45)
+    icon.BackgroundTransparency = 0.1
+    icon.BorderSizePixel = 0
+    icon.Visible = false
+    icon.Parent = screenGui
+    local iconCorner = Instance.new("UICorner")
+    iconCorner.CornerRadius = UDim.new(0, 30)
+    iconCorner.Parent = icon
+    
+    local iconLabel = Instance.new("TextLabel")
+    iconLabel.Size = UDim2.new(1, 0, 1, 0)
+    iconLabel.BackgroundTransparency = 1
+    iconLabel.Text = "⚡"
+    iconLabel.TextColor3 = Color3.fromRGB(255, 255, 255)
+    iconLabel.TextSize = 30
+    iconLabel.Font = Enum.Font.GothamBold
+    iconLabel.Parent = icon
+    
+    icon.InputBegan:Connect(function(input)
+        if input.UserInputType == Enum.UserInputType.Touch or input.UserInputType == Enum.UserInputType.MouseButton1 then
+            -- Разворачиваем GUI
+            guiMinimized = false
+            icon.Visible = false
+            mainFrame.Visible = true
+            -- Обновляем данные
+            updateServerInfo()
+            updatePlayersList()
+            notify("GUI", "Window restored", 1)
+        end
+    end)
+    return icon
+end
+
+minimizedIcon = createMinimizedIcon()
+
+-- Логика сворачивания
+minimizeBtn.MouseButton1Click:Connect(function()
+    guiMinimized = true
+    mainFrame.Visible = false
+    minimizedIcon.Visible = true
+    notify("GUI", "Minimized. Tap the ⚡ icon to restore", 2)
+end)
+
+-- Логика полного закрытия
+closeBtn.MouseButton1Click:Connect(function()
+    -- Полностью удаляем GUI и выгружаем скрипт
+    if isSpectating then stopSpectate() end
+    screenGui:Destroy()
+    _G.MobileHubLoaded = false
+    notify("GUI", "Mobile Hub closed", 2)
+    log("Mobile Hub closed by user")
+end)
+
+-- === ВКЛАДКИ ===
+local tabBar = Instance.new("Frame")
+tabBar.Size = UDim2.new(1, 0, 0, 45)
+tabBar.Position = UDim2.new(0, 0, 0, 45)
+tabBar.BackgroundColor3 = Color3.fromRGB(30, 30, 40)
+tabBar.BorderSizePixel = 0
+tabBar.Parent = mainFrame
+
+local buttons = {}
+local contents = {}
+
+local function switchTab(tabName)
+    for name, btn in pairs(buttons) do
+        btn.TextColor3 = (name == tabName) and Color3.fromRGB(255, 255, 255) or Color3.fromRGB(160, 160, 160)
+    end
+    for name, cont in pairs(contents) do
+        cont.Visible = (name == tabName)
+    end
+end
+
+-- SERVER TAB
+local serverTabBtn = Instance.new("TextButton")
+serverTabBtn.Size = UDim2.new(0.25, 0, 1, 0)
+serverTabBtn.BackgroundTransparency = 1
+serverTabBtn.Text = "SERVER"
+serverTabBtn.TextColor3 = Color3.fromRGB(255, 255, 255)
+serverTabBtn.TextSize = 14
+serverTabBtn.Font = Enum.Font.GothamSemibold
+serverTabBtn.Parent = tabBar
+buttons["SERVER"] = serverTabBtn
+
+local serverContent = Instance.new("ScrollingFrame")
+serverContent.Size = UDim2.new(1, 0, 1, -90)
+serverContent.Position = UDim2.new(0, 0, 0, 90)
+serverContent.BackgroundTransparency = 1
+serverContent.ScrollBarThickness = 4
+serverContent.CanvasSize = UDim2.new(0, 0, 0, 250)
+serverContent.Parent = mainFrame
+contents["SERVER"] = serverContent
+
+-- PLAYERS TAB
+local playersTabBtn = Instance.new("TextButton")
+playersTabBtn.Size = UDim2.new(0.25, 0, 1, 0)
+playersTabBtn.Position = UDim2.new(0.25, 0, 0, 0)
+playersTabBtn.BackgroundTransparency = 1
+playersTabBtn.Text = "PLAYERS"
+playersTabBtn.TextColor3 = Color3.fromRGB(160, 160, 160)
+playersTabBtn.TextSize = 14
+playersTabBtn.Font = Enum.Font.GothamSemibold
+playersTabBtn.Parent = tabBar
+buttons["PLAYERS"] = playersTabBtn
+
+local playersContent = Instance.new("ScrollingFrame")
+playersContent.Size = UDim2.new(1, 0, 1, -90)
+playersContent.Position = UDim2.new(0, 0, 0, 90)
+playersContent.BackgroundTransparency = 1
+playersContent.ScrollBarThickness = 4
+playersContent.CanvasSize = UDim2.new(0, 0, 0, 450)
+playersContent.Visible = false
+playersContent.Parent = mainFrame
+contents["PLAYERS"] = playersContent
+
+-- FEATURES TAB (заглушка)
+local featuresTabBtn = Instance.new("TextButton")
+featuresTabBtn.Size = UDim2.new(0.25, 0, 1, 0)
+featuresTabBtn.Position = UDim2.new(0.5, 0, 0, 0)
+featuresTabBtn.BackgroundTransparency = 1
+featuresTabBtn.Text = "FEATURES"
+featuresTabBtn.TextColor3 = Color3.fromRGB(160, 160, 160)
+featuresTabBtn.TextSize = 14
+featuresTabBtn.Font = Enum.Font.GothamSemibold
+featuresTabBtn.Parent = tabBar
+buttons["FEATURES"] = featuresTabBtn
+
+local featuresContent = Instance.new("ScrollingFrame")
+featuresContent.Size = UDim2.new(1, 0, 1, -90)
+featuresContent.Position = UDim2.new(0, 0, 0, 90)
+featuresContent.BackgroundTransparency = 1
+featuresContent.ScrollBarThickness = 4
+featuresContent.CanvasSize = UDim2.new(0, 0, 0, 200)
+featuresContent.Visible = false
+featuresContent.Parent = mainFrame
+contents["FEATURES"] = featuresContent
+
+-- SETTINGS TAB (заглушка)
+local settingsTabBtn = Instance.new("TextButton")
+settingsTabBtn.Size = UDim2.new(0.25, 0, 1, 0)
+settingsTabBtn.Position = UDim2.new(0.75, 0, 0, 0)
+settingsTabBtn.BackgroundTransparency = 1
+settingsTabBtn.Text = "SETTINGS"
+settingsTabBtn.TextColor3 = Color3.fromRGB(160, 160, 160)
+settingsTabBtn.TextSize = 14
+settingsTabBtn.Font = Enum.Font.GothamSemibold
+settingsTabBtn.Parent = tabBar
+buttons["SETTINGS"] = settingsTabBtn
+
+local settingsContent = Instance.new("ScrollingFrame")
+settingsContent.Size = UDim2.new(1, 0, 1, -90)
+settingsContent.Position = UDim2.new(0, 0, 0, 90)
+settingsContent.BackgroundTransparency = 1
+settingsContent.ScrollBarThickness = 4
+settingsContent.CanvasSize = UDim2.new(0, 0, 0, 200)
+settingsContent.Visible = false
+settingsContent.Parent = mainFrame
+contents["SETTINGS"] = settingsContent
+
+-- Переключение вкладок
+for name, btn in pairs(buttons) do
+    btn.MouseButton1Click:Connect(function()
+        switchTab(name)
+    end)
+end
+
+-- === НАПОЛНЕНИЕ SERVER TAB ===
+local function createLabel(parent, text, y)
+    local l = Instance.new("TextLabel")
+    l.Size = UDim2.new(1, -20, 0, 32)
+    l.Position = UDim2.new(0, 10, 0, y)
+    l.BackgroundColor3 = Color3.fromRGB(40, 40, 50)
+    l.BackgroundTransparency = 0.3
+    l.Text = text
+    l.TextColor3 = Color3.fromRGB(220, 220, 220)
+    l.TextSize = 14
+    l.Font = Enum.Font.Gotham
+    l.TextXAlignment = Enum.TextXAlignment.Left
+    l.Parent = parent
+    local c = Instance.new("UICorner")
+    c.CornerRadius = UDim.new(0, 6)
+    c.Parent = l
+    return l
+end
+
+local function createButton(parent, text, y, callback)
+    local btn = Instance.new("TextButton")
+    btn.Size = UDim2.new(1, -20, 0, 40)
+    btn.Position = UDim2.new(0, 10, 0, y)
+    btn.BackgroundColor3 = Color3.fromRGB(70, 70, 90)
+    btn.Text = text
+    btn.TextColor3 = Color3.fromRGB(255, 255, 255)
+    btn.TextSize = 15
+    btn.Font = Enum.Font.GothamSemibold
+    btn.Parent = parent
+    local c = Instance.new("UICorner")
+    c.CornerRadius = UDim.new(0, 8)
+    c.Parent = btn
+    btn.MouseButton1Click:Connect(callback)
+    return btn
+end
+
+local yOff = 10
+local jobIdLabel = createLabel(serverContent, "Job ID: Loading...", yOff); yOff = yOff + 37
+local playersLabel = createLabel(serverContent, "Players: 0 / 0", yOff); yOff = yOff + 37
+local pingLabel = createLabel(serverContent, "Ping: 0 ms", yOff); yOff = yOff + 45
+createButton(serverContent, "📋 Copy Job ID", yOff, function()
+    if setclipboard then setclipboard(game.JobId or "No JobId"); notify("Copied", "Job ID copied!", 2)
+    else notify("Error", "Copy not supported", 2) end
+end)
+yOff = yOff + 50
+local statusLabel = createLabel(serverContent, "Status: ONLINE", yOff)
+statusLabel.TextColor3 = Color3.fromRGB(100, 200, 100)
+
+-- === НАПОЛНЕНИЕ PLAYERS TAB ===
+local dropdownY = 10
+local playersDropdown = nil
+local spectateToggle = nil
+local infoTextField = nil
+
+-- Кнопка обновления
+createButton(playersContent, "🔄 Refresh Players", dropdownY, function()
+    updatePlayersList()
+end)
+dropdownY = dropdownY + 50
+
+-- Выпадающий список (кастомный)
+local dropdownFrame = Instance.new("Frame")
+dropdownFrame.Size = UDim2.new(1, -20, 0, 40)
+dropdownFrame.Position = UDim2.new(0, 10, 0, dropdownY)
+dropdownFrame.BackgroundColor3 = Color3.fromRGB(45, 45, 55)
+dropdownFrame.Parent = playersContent
+local dropdownCorner = Instance.new("UICorner")
+dropdownCorner.CornerRadius = UDim.new(0, 8)
+dropdownCorner.Parent = dropdownFrame
+
+local selectedLabel = Instance.new("TextLabel")
+selectedLabel.Size = UDim2.new(1, -30, 1, 0)
+selectedLabel.BackgroundTransparency = 1
+selectedLabel.Text = "Select player"
+selectedLabel.TextColor3 = Color3.fromRGB(255, 255, 255)
+selectedLabel.TextSize = 14
+selectedLabel.Font = Enum.Font.Gotham
+selectedLabel.TextXAlignment = Enum.TextXAlignment.Left
+selectedLabel.Parent = dropdownFrame
+
+local arrow = Instance.new("TextLabel")
+arrow.Size = UDim2.new(0, 30, 1, 0)
+arrow.Position = UDim2.new(1, -30, 0, 0)
+arrow.BackgroundTransparency = 1
+arrow.Text = "▼"
+arrow.TextColor3 = Color3.fromRGB(200, 200, 200)
+arrow.TextSize = 14
+arrow.Parent = dropdownFrame
+
+local dropdownList = Instance.new("Frame")
+dropdownList.Size = UDim2.new(1, 0, 0, 0)
+dropdownList.Position = UDim2.new(0, 0, 1, 0)
+dropdownList.BackgroundColor3 = Color3.fromRGB(35, 35, 45)
+dropdownList.Visible = false
+dropdownList.ClipsDescendants = true
+dropdownList.Parent = dropdownFrame
+local listCorner = Instance.new("UICorner")
+listCorner.CornerRadius = UDim.new(0, 8)
+listCorner.Parent = dropdownList
+local listLayout = Instance.new("UIListLayout")
+listLayout.Padding = UDim.new(0, 2)
+listLayout.Parent = dropdownList
+
+local function updateDropdownItems(items)
+    for _, child in ipairs(dropdownList:GetChildren()) do if child:IsA("TextButton") then child:Destroy() end end
+    for i, item in ipairs(items) do
+        local opt = Instance.new("TextButton")
+        opt.Size = UDim2.new(1, 0, 0, 35)
+        opt.BackgroundColor3 = Color3.fromRGB(45, 45, 55)
+        opt.Text = item
+        opt.TextColor3 = Color3.fromRGB(255, 255, 255)
+        opt.TextSize = 13
+        opt.Font = Enum.Font.Gotham
+        opt.Parent = dropdownList
+        opt.MouseButton1Click:Connect(function()
+            selectedLabel.Text = item
+            dropdownList.Visible = false
+            dropdownFrame.Size = UDim2.new(1, -20, 0, 40)
+            -- Вызов callback при выборе
+            if playersDropdownCallback then playersDropdownCallback(item) end
+        end)
+    end
+    dropdownList.CanvasSize = UDim2.new(0, 0, 0, #items * 37)
+end
+
+dropdownFrame.MouseButton1Click:Connect(function()
+    if dropdownList.Visible then
+        dropdownList.Visible = false
+        dropdownFrame.Size = UDim2.new(1, -20, 0, 40)
+    else
+        dropdownList.Visible = true
+        dropdownFrame.Size = UDim2.new(1, -20, 0, 40 + math.min(#playersNames * 37, 180))
+    end
+end)
+
+local playersNames = {}
+local playersDropdownCallback = nil
+
+function setPlayersDropdown(items, callback)
+    playersNames = items
+    playersDropdownCallback = callback
+    updateDropdownItems(items)
+end
+
+dropdownY = dropdownY + 50
+
+-- Информационное поле
+local infoFrame = Instance.new("Frame")
+infoFrame.Size = UDim2.new(1, -20, 0, 100)
+infoFrame.Position = UDim2.new(0, 10, 0, dropdownY)
+infoFrame.BackgroundColor3 = Color3.fromRGB(35, 35, 45)
+infoFrame.BackgroundTransparency = 0.5
+infoFrame.Parent = playersContent
+local infoCorner = Instance.new("UICorner")
+infoCorner.CornerRadius = UDim.new(0, 8)
+infoCorner.Parent = infoFrame
+
+infoTextField = Instance.new("TextLabel")
+infoTextField.Size = UDim2.new(1, -10, 1, -10)
+infoTextField.Position = UDim2.new(0, 5, 0, 5)
+infoTextField.BackgroundTransparency = 1
+infoTextField.Text = "Select a player"
+infoTextField.TextColor3 = Color3.fromRGB(200, 200, 200)
+infoTextField.TextSize = 13
+infoTextField.Font = Enum.Font.Gotham
+infoTextField.TextWrapped = true
+infoTextField.Parent = infoFrame
+dropdownY = dropdownY + 110
+
+-- Spectate Toggle
+local toggleFrame = Instance.new("Frame")
+toggleFrame.Size = UDim2.new(1, -20, 0, 40)
+toggleFrame.Position = UDim2.new(0, 10, 0, dropdownY)
+toggleFrame.BackgroundColor3 = Color3.fromRGB(45, 45, 55)
+toggleFrame.Parent = playersContent
+local toggleCorner = Instance.new("UICorner")
+toggleCorner.CornerRadius = UDim.new(0, 8)
+toggleCorner.Parent = toggleFrame
+
+local toggleLabel = Instance.new("TextLabel")
+toggleLabel.Size = UDim2.new(1, -60, 1, 0)
+toggleLabel.BackgroundTransparency = 1
+toggleLabel.Text = "🔍 Spectate Mode"
+toggleLabel.TextColor3 = Color3.fromRGB(255, 255, 255)
+toggleLabel.TextSize = 14
+toggleLabel.Font = Enum.Font.Gotham
+toggleLabel.TextXAlignment = Enum.TextXAlignment.Left
+toggleLabel.Parent = toggleFrame
+
+local toggleBtn = Instance.new("TextButton")
+toggleBtn.Size = UDim2.new(0, 50, 0, 30)
+toggleBtn.Position = UDim2.new(1, -55, 0.5, -15)
+toggleBtn.BackgroundColor3 = Color3.fromRGB(100, 100, 120)
+toggleBtn.Text = "OFF"
+toggleBtn.TextColor3 = Color3.fromRGB(255, 255, 255)
+toggleBtn.TextSize = 12
+toggleBtn.Font = Enum.Font.GothamBold
+toggleBtn.Parent = toggleFrame
+local btnCorner = Instance.new("UICorner")
+btnCorner.CornerRadius = UDim.new(0, 15)
+btnCorner.Parent = toggleBtn
+
+local spectateState = false
+toggleBtn.MouseButton1Click:Connect(function()
+    spectateState = not spectateState
+    if spectateState then
+        toggleBtn.BackgroundColor3 = Color3.fromRGB(76, 175, 80)
+        toggleBtn.Text = "ON"
+        local selected = selectedLabel.Text
+        local target = Players:FindFirstChild(selected)
+        if target and target ~= LocalPlayer then
+            startSpectate(target)
+        else
+            spectateState = false
+            toggleBtn.BackgroundColor3 = Color3.fromRGB(100, 100, 120)
+            toggleBtn.Text = "OFF"
+            notify("Error", "Invalid player selected", 2)
+        end
+    else
+        stopSpectate()
+        toggleBtn.BackgroundColor3 = Color3.fromRGB(100, 100, 120)
+        toggleBtn.Text = "OFF"
+    end
+end)
+
+function setSpectateToggleOff()
+    spectateState = false
+    toggleBtn.BackgroundColor3 = Color3.fromRGB(100, 100, 120)
+    toggleBtn.Text = "OFF"
+end
+
+-- === ФУНКЦИИ ОБНОВЛЕНИЯ ДАННЫХ ===
+function updateServerInfo()
     pcall(function()
         jobIdLabel.Text = "Job ID: " .. (game.JobId or "Offline")
         playersLabel.Text = "Players: " .. #Players:GetPlayers() .. " / " .. Players.MaxPlayers
         pingLabel.Text = "Ping: " .. math.floor(LocalPlayer:GetNetworkPing() * 1000) .. " ms"
+        statusLabel.Text = "Status: ONLINE"
     end)
 end
 
-local function updatePlayersList()
+function updatePlayersList()
     local names = {}
     for _, p in ipairs(Players:GetPlayers()) do
         table.insert(names, p.Name)
     end
     if #names == 0 then table.insert(names, "No players") end
-    if playersDropdown then
-        playersDropdown.update(names)
-    end
+    setPlayersDropdown(names, function(selected)
+        local player = Players:FindFirstChild(selected)
+        if player then
+            local info = string.format("Name: %s\nDisplay: %s\nAccount Age: %d days\nTeam: %s",
+                player.Name, player.DisplayName or player.Name, player.AccountAge or 0,
+                (player.Team and player.Team.Name) or "No team")
+            infoTextField.Text = info
+            print(info)
+            notify("Player Info", player.Name .. ": " .. (player.AccountAge or 0) .. " days", 3)
+        end
+    end)
 end
 
--- === СОБЫТИЯ ===
+-- === СОБЫТИЯ И ЦИКЛЫ ===
 task.spawn(function()
     while task.wait(2) do
-        updateServerInfo()
+        if mainFrame and mainFrame.Visible then
+            updateServerInfo()
+        end
     end
 end)
 
-Players.PlayerAdded:Connect(updatePlayersList)
-Players.PlayerRemoving:Connect(updatePlayersList)
-
+Players.PlayerAdded:Connect(function() updatePlayersList() end)
 Players.PlayerRemoving:Connect(function(player)
+    updatePlayersList()
     if currentSpectateTarget == player then
-        if spectateToggle then spectateToggle.set(false) else stopSpectate() end
+        if spectateState then setSpectateToggleOff() end
+        stopSpectate()
     end
 end)
 
--- === ОТКРЫТИЕ/ЗАКРЫТИЕ ПО K ===
+-- Запуск
+updateServerInfo()
+updatePlayersList()
+switchTab("SERVER") -- активируем первую вкладку
+notify("Ready", "Mobile Hub v7.0 loaded! Press K to toggle?", 3)
+log("Mobile Hub v7.0 ready")
+
+-- Обработка кнопки K (скрыть/показать основное окно, но не иконку)
 UserInputService.InputBegan:Connect(function(input, gameProcessed)
     if gameProcessed then return end
     if input.KeyCode == Enum.KeyCode.K then
-        guiEnabled = not guiEnabled
-        mainFrame.Visible = guiEnabled
-        notify("GUI", guiEnabled and "Menu shown" or "Menu hidden", 1)
+        if guiMinimized then
+            -- Если свернуто, разворачиваем
+            guiMinimized = false
+            minimizedIcon.Visible = false
+            mainFrame.Visible = true
+            notify("GUI", "Window restored", 1)
+        else
+            -- Если развернуто, скрываем окно, но не сворачиваем в иконку
+            mainFrame.Visible = not mainFrame.Visible
+            notify("GUI", mainFrame.Visible and "Menu shown" or "Menu hidden", 1)
+        end
     end
 end)
-
--- === ИНИЦИАЛИЗАЦИЯ ===
-updateServerInfo()
-updatePlayersList()
-notify("Ready", "Mobile Hub v6.0 loaded! Press K to open", 3)
-log("Mobile Hub v6.0 loaded successfully!")
