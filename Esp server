@@ -1,36 +1,163 @@
 --[[
-    Script: Mobile Admin Hub
+    Script: Mobile Admin Hub v5.0
     Executor: Delta / Fluxus (Mobile)
-    Optimized for: Realme, Xiaomi, Samsung
-    Version: 2.0
+    Description: Production-ready version with full optimization
 --]]
 
--- Load Rayfield Library
-local Rayfield = loadstring(game:HttpGet('https://sirius.menu/rayfield'))()
-
-if not Rayfield then
+-- === ЗАЩИТА ОТ ДВОЙНОЙ ЗАГРУЗКИ ===
+if _G.MobileHubLoaded then
+    print("[WARN] Mobile Hub already loaded, exiting")
     game:GetService("StarterGui"):SetCore("SendNotification", {
         Title = "Error",
-        Text = "Failed to load Rayfield",
-        Duration = 5
+        Text = "Mobile Hub already running",
+        Duration = 3
     })
     return
 end
+_G.MobileHubLoaded = true
 
--- Services
+-- === КОНФИГУРАЦИЯ ===
+local CONFIG = {
+    CAMERA_OFFSET = 2.5,
+    CAMERA_LERP_SPEED = 0.25,
+    UPDATE_SERVER_INTERVAL = 2,
+    NOTIFICATION_DURATION = 3,
+    TOGGLE_UI_KEY = Enum.KeyCode.K,
+    RAYFIELD_URL = "https://raw.githubusercontent.com/shlexware/Rayfield/main/source",
+    RAYFIELD_RETRY_ATTEMPTS = 3,
+    RAYFIELD_RETRY_DELAY = 1,
+    DEBUG = true
+}
+
+-- === ЛОГГЕР ===
+local function log(level, message)
+    if not CONFIG.DEBUG and level ~= "ERROR" then return end
+    local timestamp = os.date("%H:%M:%S")
+    print(string.format("[%s] [%s] [MobileHub] %s", timestamp, level, message))
+end
+
+-- === УТИЛИТЫ ===
+local function notify(title, text, duration)
+    duration = duration or CONFIG.NOTIFICATION_DURATION
+    pcall(function()
+        game:GetService("StarterGui"):SetCore("SendNotification", {
+            Title = title,
+            Text = text,
+            Duration = duration
+        })
+    end)
+end
+
+local function isValidPlayer(player)
+    return player and player:IsDescendantOf(game:GetService("Players"))
+end
+
+-- === ЗАГРУЗКА БИБЛИОТЕКИ ===
+local function loadRayfield()
+    for attempt = 1, CONFIG.RAYFIELD_RETRY_ATTEMPTS do
+        local success, result = pcall(function()
+            return loadstring(game:HttpGet(CONFIG.RAYFIELD_URL))()
+        end)
+        
+        if success and result and type(result) == "table" then
+            log("INFO", "Rayfield loaded successfully on attempt " .. attempt)
+            return result
+        end
+        
+        if attempt < CONFIG.RAYFIELD_RETRY_ATTEMPTS then
+            log("WARN", "Rayfield load failed, retrying... (" .. attempt .. "/" .. CONFIG.RAYFIELD_RETRY_ATTEMPTS .. ")")
+            notify("Loading", "Retrying... (" .. attempt .. "/" .. CONFIG.RAYFIELD_RETRY_ATTEMPTS .. ")", 1)
+            task.wait(CONFIG.RAYFIELD_RETRY_DELAY)
+        end
+    end
+    
+    log("ERROR", "Failed to load Rayfield after " .. CONFIG.RAYFIELD_RETRY_ATTEMPTS .. " attempts")
+    notify("Error", "Failed to load Rayfield", 5)
+    return nil
+end
+
+local Rayfield = loadRayfield()
+if not Rayfield or not Rayfield.CreateWindow then
+    log("ERROR", "Rayfield API missing - exiting")
+    _G.MobileHubLoaded = false
+    return
+end
+
+-- === СЕРВИСЫ ===
 local Players = game:GetService("Players")
 local LocalPlayer = Players.LocalPlayer
 local RunService = game:GetService("RunService")
 local Camera = workspace.CurrentCamera
 
--- Variables
+-- === ПЕРЕМЕННЫЕ СОСТОЯНИЯ ===
 local currentSpectateTarget = nil
 local spectateConnection = nil
 local originalCameraType = nil
 local originalCameraCFrame = nil
 local isSpectating = false
+local infoLabel = nil
+local lastServerState = {} -- Для дебаунса обновлений
 
--- Copy to clipboard
+-- === СОХРАНЕНИЕ СОСТОЯНИЯ ===
+local function saveState()
+    if currentSpectateTarget and isValidPlayer(currentSpectateTarget) then
+        local state = {
+            lastPlayer = currentSpectateTarget.Name,
+            cameraType = originalCameraType
+        }
+        log("INFO", "State saved: last player was " .. state.lastPlayer)
+    end
+end
+
+-- === ОЧИСТКА ПРИ ВЫХОДЕ ===
+local function cleanup()
+    log("INFO", "Cleaning up Mobile Hub")
+    saveState()
+    
+    if isSpectating then
+        stopSpectate()
+    end
+    
+    if spectateConnection then
+        spectateConnection:Disconnect()
+        spectateConnection = nil
+    end
+    
+    _G.MobileHubLoaded = false
+end
+
+-- === РЕГИСТРАЦИЯ ОЧИСТКИ ===
+local function registerCleanup()
+    -- Способ 1: через script (для большинства исполнителей)
+    if script and script.Disabled then
+        script.Disabled:Connect(function()
+            cleanup()
+        end)
+    end
+    
+    -- Способ 2: через смерть игрока (резервный вариант)
+    local function onPlayerDied()
+        if isSpectating then
+            log("WARN", "Player died, cleaning up spectate")
+            if spectateToggle then
+                spectateToggle:Set(false)
+            else
+                stopSpectate()
+            end
+        end
+    end
+    
+    local humanoid = LocalPlayer.Character and LocalPlayer.Character:FindFirstChild("Humanoid")
+    if humanoid then
+        humanoid.Died:Connect(onPlayerDied)
+    else
+        LocalPlayer.CharacterAdded:Connect(function(character)
+            character:WaitForChild("Humanoid").Died:Connect(onPlayerDied)
+        end)
+    end
+end
+
+-- === КОПИРОВАНИЕ ===
 local function copyToClipboard(text)
     local success = false
     
@@ -41,47 +168,50 @@ local function copyToClipboard(text)
     elseif writefile then
         success = pcall(writefile, "temp.txt", text)
         if success then
-            game:GetService("StarterGui"):SetCore("SendNotification", {
-                Title = "Saved",
-                Text = "JobId saved to temp.txt",
-                Duration = 3
-            })
+            notify("Saved", "JobId saved to temp.txt")
             return
         end
     end
     
     if success then
-        game:GetService("StarterGui"):SetCore("SendNotification", {
-            Title = "Copied",
-            Text = "JobId: " .. text,
-            Duration = 2
-        })
+        notify("Copied", "JobId: " .. text, 2)
     else
-        game:GetService("StarterGui"):SetCore("SendNotification", {
-            Title = "Error",
-            Text = "Copy not supported",
-            Duration = 3
-        })
+        notify("Error", "Copy not supported", 3)
     end
 end
 
--- Update server info
+-- === ОБНОВЛЕНИЕ ИНФОРМАЦИИ (с дебаунсом) ===
 local function updateServerInfo()
-    task.spawn(function()
-        pcall(function()
-            local jobId = game.JobId or "Offline"
-            local playerCount = #Players:GetPlayers()
-            local maxPlayers = Players.MaxPlayers
-            local ping = math.floor(LocalPlayer:GetNetworkPing() * 1000) .. " ms"
-            
-            Rayfield:SetElementFlagValue("Server_JobId", jobId)
-            Rayfield:SetElementFlagValue("Server_Players", playerCount .. " / " .. maxPlayers)
-            Rayfield:SetElementFlagValue("Server_Ping", ping)
-        end)
+    pcall(function()
+        local newState = {
+            jobId = game.JobId or "Offline",
+            playerCount = #Players:GetPlayers(),
+            maxPlayers = Players.MaxPlayers,
+            ping = math.floor(LocalPlayer:GetNetworkPing() * 1000)
+        }
+        
+        if newState.jobId ~= lastServerState.jobId then
+            Rayfield:SetElementFlagValue("Server_JobId", newState.jobId)
+            lastServerState.jobId = newState.jobId
+        end
+        
+        if newState.playerCount ~= lastServerState.playerCount or 
+           newState.maxPlayers ~= lastServerState.maxPlayers then
+            Rayfield:SetElementFlagValue("Server_Players", 
+                newState.playerCount .. " / " .. newState.maxPlayers)
+            lastServerState.playerCount = newState.playerCount
+            lastServerState.maxPlayers = newState.maxPlayers
+        end
+        
+        local pingMs = newState.ping .. " ms"
+        if pingMs ~= lastServerState.ping then
+            Rayfield:SetElementFlagValue("Server_Ping", pingMs)
+            lastServerState.ping = pingMs
+        end
     end)
 end
 
--- Refresh players dropdown
+-- === ОБНОВЛЕНИЕ СПИСКА ===
 local function refreshPlayersDropdown()
     local playerNames = {}
     for _, player in ipairs(Players:GetPlayers()) do
@@ -92,31 +222,35 @@ local function refreshPlayersDropdown()
         playerNames = {"No players"}
     end
     
-    Rayfield:SetElementFlagValue("Players_Dropdown", {
-        Options = playerNames,
-        CurrentOption = {playerNames[1]}
-    })
+    pcall(function()
+        Rayfield:SetElementFlagValue("Players_Dropdown", {
+            Options = playerNames,
+            CurrentOption = {playerNames[1]}
+        })
+    end)
 end
 
--- Get player info
+-- === ИНФОРМАЦИЯ ОБ ИГРОКЕ ===
 local function getPlayerInfo(player)
-    if not player then return "Player not found" end
+    if not isValidPlayer(player) then 
+        return "Player not found or invalid" 
+    end
     
     local accountAge = player.AccountAge or 0
     local displayName = player.DisplayName or player.Name
     local team = player.Team
     local teamName = team and team.Name or "No team"
     
-    local infoText = string.format(
+    return string.format(
         "Name: %s\nDisplay: %s\nAccount Age: %d days\nTeam: %s",
         player.Name, displayName, accountAge, teamName
     )
-    
-    return infoText
 end
 
--- Stop spectate
+-- === ОСТАНОВКА СПЕКТА ===
 local function stopSpectate()
+    log("INFO", "Stopping spectate")
+    
     if spectateConnection then
         spectateConnection:Disconnect()
         spectateConnection = nil
@@ -136,123 +270,114 @@ local function stopSpectate()
         end
         
         currentSpectateTarget = nil
-        
-        game:GetService("StarterGui"):SetCore("SendNotification", {
-            Title = "Spectate",
-            Text = "Spectate stopped",
-            Duration = 2
-        })
+        notify("Spectate", "Spectate stopped", 2)
     end
 end
 
--- Start spectate
+-- === ЗАПУСК СПЕКТА ===
 local function startSpectate(targetPlayer)
-    if not targetPlayer then return false end
+    if not isValidPlayer(targetPlayer) then
+        log("WARN", "Invalid player for spectate")
+        notify("Error", "Invalid player", 2)
+        return false
+    end
+    
+    if not game:IsLoaded() or targetPlayer.Parent == nil then
+        log("ERROR", "Game not loaded or player disconnected")
+        notify("Error", "Connection lost", 2)
+        return false
+    end
+    
+    log("INFO", "Starting spectate for " .. targetPlayer.Name)
     
     if isSpectating then
         stopSpectate()
     end
     
     local character = targetPlayer.Character
-    if not character then
-        game:GetService("StarterGui"):SetCore("SendNotification", {
-            Title = "Error",
-            Text = "Character not loaded",
-            Duration = 2
-        })
+    if not character or not character:FindFirstChild("HumanoidRootPart") then
+        log("WARN", "Character not loaded for " .. targetPlayer.Name)
+        notify("Error", "Character not loaded", 2)
         return false
     end
     
-    local rootPart = character:FindFirstChild("HumanoidRootPart")
-    if not rootPart then return false end
-    
     originalCameraType = Camera.CameraType
     originalCameraCFrame = Camera.CFrame
-    
     Camera.CameraType = Enum.CameraType.Scriptable
     
     currentSpectateTarget = targetPlayer
     isSpectating = true
     
     spectateConnection = RunService.RenderStepped:Connect(function()
-        if not isSpectating or not currentSpectateTarget then return end
+        if not isSpectating or not currentSpectateTarget then
+            stopSpectate()
+            return
+        end
         
         local char = currentSpectateTarget.Character
-        if not char then return end
+        if not char then
+            stopSpectate()
+            return
+        end
         
         local root = char:FindFirstChild("HumanoidRootPart")
-        if not root then return end
+        if not root then
+            stopSpectate()
+            return
+        end
         
-        local targetCFrame = root.CFrame + root.CFrame.UpVector * 2.5
-        Camera.CFrame = Camera.CFrame:Lerp(targetCFrame, 0.25)
+        local targetCFrame = root.CFrame + root.CFrame.UpVector * CONFIG.CAMERA_OFFSET
+        Camera.CFrame = Camera.CFrame:Lerp(targetCFrame, CONFIG.CAMERA_LERP_SPEED)
     end)
     
-    game:GetService("StarterGui"):SetCore("SendNotification", {
-        Title = "Spectate",
-        Text = "Spectating: " .. targetPlayer.Name,
-        Duration = 2
-    })
-    
+    notify("Spectate", "Spectating: " .. targetPlayer.Name, 2)
     return true
 end
 
--- Show player info
+-- === ВЫВОД ИНФОРМАЦИИ ===
 local function showPlayerInfo(playerName)
     local player = Players:FindFirstChild(playerName)
-    if not player then return end
+    if not isValidPlayer(player) then
+        log("WARN", "Player not found: " .. tostring(playerName))
+        notify("Error", "Player not found", 2)
+        return
+    end
     
     local infoText = getPlayerInfo(player)
-    
+    log("INFO", "Displaying info for " .. player.Name)
     print(infoText)
     
-    pcall(function()
-        Rayfield:SetElementFlagValue("Player_Info_Text", infoText)
-    end)
+    if infoLabel then
+        pcall(function()
+            infoLabel:Set(infoText)
+        end)
+    else
+        pcall(function()
+            Rayfield:SetElementFlagValue("Player_Info_Text", infoText)
+        end)
+    end
     
-    game:GetService("StarterGui"):SetCore("SendNotification", {
-        Title = "Player Info",
-        Text = player.Name .. ": " .. player.AccountAge .. " days",
-        Duration = 3
-    })
+    notify("Player Info", player.Name .. ": " .. player.AccountAge .. " days", 3)
 end
 
--- Create UI
+-- === СОЗДАНИЕ UI ===
 local Window = Rayfield:CreateWindow({
-    Name = "Mobile Hub",
+    Name = "Mobile Hub v5.0",
     Icon = 0,
     LoadingTitle = "Loading",
-    LoadingSubtitle = "Optimized for mobile",
+    LoadingSubtitle = "Production Ready",
     Theme = "Dark",
-    ToggleUIKeybind = Enum.KeyCode.K,
-    ConfigurationSaving = {
-        Enabled = false
-    },
+    ToggleUIKeybind = CONFIG.TOGGLE_UI_KEY,
+    ConfigurationSaving = { Enabled = false },
     KeySystem = false
 })
 
--- Server Tab
+-- === ВКЛАДКА SERVER ===
 local ServerTab = Window:CreateTab("Server", nil)
-
 ServerTab:CreateSection("Server Info")
-
-ServerTab:CreateParagraph({
-    Name = "Job ID",
-    Flag = "Server_JobId",
-    Value = "Loading..."
-})
-
-ServerTab:CreateParagraph({
-    Name = "Players",
-    Flag = "Server_Players",
-    Value = "0 / 0"
-})
-
-ServerTab:CreateParagraph({
-    Name = "Ping",
-    Flag = "Server_Ping",
-    Value = "0 ms"
-})
-
+ServerTab:CreateParagraph({ Name = "Job ID", Flag = "Server_JobId", Value = "Loading..." })
+ServerTab:CreateParagraph({ Name = "Players", Flag = "Server_Players", Value = "0 / 0" })
+ServerTab:CreateParagraph({ Name = "Ping", Flag = "Server_Ping", Value = "0 ms" })
 ServerTab:CreateButton({
     Name = "Copy JobId",
     Flag = "CopyJobId",
@@ -261,17 +386,13 @@ ServerTab:CreateButton({
     end
 })
 
--- Players Tab
+-- === ВКЛАДКА PLAYERS ===
 local PlayersTab = Window:CreateTab("Players", nil)
-
 PlayersTab:CreateSection("Management")
-
 PlayersTab:CreateButton({
     Name = "Refresh List",
     Flag = "RefreshPlayers",
-    Callback = function()
-        refreshPlayersDropdown()
-    end
+    Callback = refreshPlayersDropdown
 })
 
 PlayersTab:CreateDropdown({
@@ -287,7 +408,7 @@ PlayersTab:CreateDropdown({
     end
 })
 
-PlayersTab:CreateParagraph({
+infoLabel = PlayersTab:CreateParagraph({
     Name = "Player Info",
     Flag = "Player_Info_Text",
     Value = "Select a player from the list"
@@ -306,19 +427,12 @@ local spectateToggle = PlayersTab:CreateToggle({
                     startSpectate(target)
                 else
                     spectateToggle:Set(false)
-                    game:GetService("StarterGui"):SetCore("SendNotification", {
-                        Title = "Error",
-                        Text = "Player not found",
-                        Duration = 2
-                    })
+                    log("WARN", "Target player not found")
+                    notify("Error", "Player not found", 2)
                 end
             else
                 spectateToggle:Set(false)
-                game:GetService("StarterGui"):SetCore("SendNotification", {
-                    Title = "Error",
-                    Text = "Select a player first",
-                    Duration = 2
-                })
+                notify("Error", "Select a player first", 2)
             end
         else
             stopSpectate()
@@ -326,39 +440,36 @@ local spectateToggle = PlayersTab:CreateToggle({
     end
 })
 
--- Background tasks
-task.spawn(function()
-    while task.wait(2) do
+-- === СОБЫТИЯ ===
+local lastServerUpdate = 0
+RunService.Heartbeat:Connect(function()
+    if tick() - lastServerUpdate >= CONFIG.UPDATE_SERVER_INTERVAL then
         updateServerInfo()
+        lastServerUpdate = tick()
     end
 end)
 
-task.spawn(function()
-    while task.wait(5) do
-        refreshPlayersDropdown()
-    end
+Players.PlayerAdded:Connect(function()
+    log("INFO", "Player added, refreshing dropdown")
+    refreshPlayersDropdown()
 end)
 
--- Events
 Players.PlayerRemoving:Connect(function(player)
+    log("INFO", "Player removed: " .. player.Name)
+    refreshPlayersDropdown()
     if currentSpectateTarget == player then
         if spectateToggle then
             spectateToggle:Set(false)
         else
             stopSpectate()
         end
-        refreshPlayersDropdown()
     end
 end)
 
-Players.PlayerAdded:Connect(function()
-    refreshPlayersDropdown()
-end)
-
--- Startup
+-- === ЗАПУСК ===
 task.wait(0.5)
 updateServerInfo()
 refreshPlayersDropdown()
-
-print("Mobile Hub loaded! Press K to toggle UI")
-```
+registerCleanup()
+log("INFO", "Mobile Hub v5.0 loaded successfully!")
+notify("Ready", "Mobile Hub v5.0 loaded! Press K to toggle UI", 3)
