@@ -1,12 +1,11 @@
 --[[
-    Script: Mobile Admin Hub v5.0
+    Script: Mobile Hub v6.0 (No External Libraries)
     Executor: Delta / Fluxus (Mobile)
-    Description: Production-ready version with full optimization
+    Описание: Полностью свой GUI, без Rayfield/Orion
 --]]
 
 -- === ЗАЩИТА ОТ ДВОЙНОЙ ЗАГРУЗКИ ===
 if _G.MobileHubLoaded then
-    print("[WARN] Mobile Hub already loaded, exiting")
     game:GetService("StarterGui"):SetCore("SendNotification", {
         Title = "Error",
         Text = "Mobile Hub already running",
@@ -16,25 +15,28 @@ if _G.MobileHubLoaded then
 end
 _G.MobileHubLoaded = true
 
--- === КОНФИГУРАЦИЯ ===
+-- === КОНФИГ ===
 local CONFIG = {
     CAMERA_OFFSET = 2.5,
     CAMERA_LERP_SPEED = 0.25,
-    UPDATE_SERVER_INTERVAL = 2,
-    NOTIFICATION_DURATION = 3,
-    TOGGLE_UI_KEY = Enum.KeyCode.K,
-    RAYFIELD_URL = "https://raw.githubusercontent.com/shlexware/Rayfield/main/source",
-    RAYFIELD_RETRY_ATTEMPTS = 3,
-    RAYFIELD_RETRY_DELAY = 1,
-    DEBUG = true
+    NOTIFICATION_DURATION = 3
 }
 
--- === ЛОГГЕР ===
-local function log(level, message)
-    if not CONFIG.DEBUG and level ~= "ERROR" then return end
-    local timestamp = os.date("%H:%M:%S")
-    print(string.format("[%s] [%s] [MobileHub] %s", timestamp, level, message))
-end
+-- === СЕРВИСЫ ===
+local Players = game:GetService("Players")
+local LocalPlayer = Players.LocalPlayer
+local RunService = game:GetService("RunService")
+local Camera = workspace.CurrentCamera
+local UserInputService = game:GetService("UserInputService")
+local TweenService = game:GetService("TweenService")
+
+-- === ПЕРЕМЕННЫЕ ===
+local currentSpectateTarget = nil
+local spectateConnection = nil
+local originalCameraType = nil
+local originalCameraCFrame = nil
+local isSpectating = false
+local guiEnabled = true
 
 -- === УТИЛИТЫ ===
 local function notify(title, text, duration)
@@ -48,209 +50,402 @@ local function notify(title, text, duration)
     end)
 end
 
-local function isValidPlayer(player)
-    return player and player:IsDescendantOf(game:GetService("Players"))
+local function log(msg)
+    print("[MobileHub] " .. msg)
 end
 
--- === ЗАГРУЗКА БИБЛИОТЕКИ ===
-local function loadRayfield()
-    for attempt = 1, CONFIG.RAYFIELD_RETRY_ATTEMPTS do
-        local success, result = pcall(function()
-            return loadstring(game:HttpGet(CONFIG.RAYFIELD_URL))()
-        end)
-        
-        if success and result and type(result) == "table" then
-            log("INFO", "Rayfield loaded successfully on attempt " .. attempt)
-            return result
-        end
-        
-        if attempt < CONFIG.RAYFIELD_RETRY_ATTEMPTS then
-            log("WARN", "Rayfield load failed, retrying... (" .. attempt .. "/" .. CONFIG.RAYFIELD_RETRY_ATTEMPTS .. ")")
-            notify("Loading", "Retrying... (" .. attempt .. "/" .. CONFIG.RAYFIELD_RETRY_ATTEMPTS .. ")", 1)
-            task.wait(CONFIG.RAYFIELD_RETRY_DELAY)
-        end
-    end
+-- === СОЗДАНИЕ GUI ===
+local screenGui = Instance.new("ScreenGui")
+screenGui.Name = "MobileHubGUI"
+screenGui.Parent = game:GetService("CoreGui")
+screenGui.ResetOnSpawn = false
+
+-- Главное окно
+local mainFrame = Instance.new("Frame")
+mainFrame.Size = UDim2.new(0, 320, 0, 480)
+mainFrame.Position = UDim2.new(0.5, -160, 0.5, -240)
+mainFrame.BackgroundColor3 = Color3.fromRGB(25, 25, 35)
+mainFrame.BackgroundTransparency = 0.05
+mainFrame.BorderSizePixel = 0
+mainFrame.ClipsDescendants = true
+mainFrame.Parent = screenGui
+
+-- Скругление углов
+local corners = Instance.new("UICorner")
+corners.CornerRadius = UDim.new(0, 12)
+corners.Parent = mainFrame
+
+-- Заголовок
+local titleBar = Instance.new("Frame")
+titleBar.Size = UDim2.new(1, 0, 0, 40)
+titleBar.BackgroundColor3 = Color3.fromRGB(35, 35, 45)
+titleBar.BorderSizePixel = 0
+titleBar.Parent = mainFrame
+
+local titleCorners = Instance.new("UICorner")
+titleCorners.CornerRadius = UDim.new(0, 12)
+titleCorners.Parent = titleBar
+
+local titleLabel = Instance.new("TextLabel")
+titleLabel.Size = UDim2.new(1, 0, 1, 0)
+titleLabel.BackgroundTransparency = 1
+titleLabel.Text = "⚡ Mobile Hub v6.0"
+titleLabel.TextColor3 = Color3.fromRGB(255, 255, 255)
+titleLabel.TextSize = 18
+titleLabel.Font = Enum.Font.GothamBold
+titleLabel.TextXAlignment = Enum.TextXAlignment.Center
+titleLabel.Parent = titleBar
+
+-- Кнопка закрытия
+local closeBtn = Instance.new("TextButton")
+closeBtn.Size = UDim2.new(0, 40, 1, 0)
+closeBtn.Position = UDim2.new(1, -40, 0, 0)
+closeBtn.BackgroundTransparency = 1
+closeBtn.Text = "✕"
+closeBtn.TextColor3 = Color3.fromRGB(255, 100, 100)
+closeBtn.TextSize = 20
+closeBtn.Font = Enum.Font.GothamBold
+closeBtn.Parent = titleBar
+
+closeBtn.MouseButton1Click:Connect(function()
+    mainFrame.Visible = false
+    guiEnabled = false
+    notify("GUI", "Menu hidden. Press K to show", 2)
+end)
+
+-- Табы (кнопки переключения)
+local tabBar = Instance.new("Frame")
+tabBar.Size = UDim2.new(1, 0, 0, 45)
+tabBar.Position = UDim2.new(0, 0, 0, 40)
+tabBar.BackgroundColor3 = Color3.fromRGB(30, 30, 40)
+tabBar.BorderSizePixel = 0
+tabBar.Parent = mainFrame
+
+local serverTabBtn = Instance.new("TextButton")
+serverTabBtn.Size = UDim2.new(0.5, 0, 1, 0)
+serverTabBtn.BackgroundTransparency = 1
+serverTabBtn.Text = "🌐 Server"
+serverTabBtn.TextColor3 = Color3.fromRGB(255, 255, 255)
+serverTabBtn.TextSize = 16
+serverTabBtn.Font = Enum.Font.GothamSemibold
+serverTabBtn.Parent = tabBar
+
+local playersTabBtn = Instance.new("TextButton")
+playersTabBtn.Size = UDim2.new(0.5, 0, 1, 0)
+playersTabBtn.Position = UDim2.new(0.5, 0, 0, 0)
+playersTabBtn.BackgroundTransparency = 1
+playersTabBtn.Text = "👥 Players"
+playersTabBtn.TextColor3 = Color3.fromRGB(200, 200, 200)
+playersTabBtn.TextSize = 16
+playersTabBtn.Font = Enum.Font.GothamSemibold
+playersTabBtn.Parent = tabBar
+
+-- Контент для вкладок
+local serverContent = Instance.new("ScrollingFrame")
+serverContent.Size = UDim2.new(1, 0, 1, -85)
+serverContent.Position = UDim2.new(0, 0, 0, 85)
+serverContent.BackgroundTransparency = 1
+serverContent.ScrollBarThickness = 4
+serverContent.CanvasSize = UDim2.new(0, 0, 0, 200)
+serverContent.Parent = mainFrame
+
+local playersContent = Instance.new("ScrollingFrame")
+playersContent.Size = UDim2.new(1, 0, 1, -85)
+playersContent.Position = UDim2.new(0, 0, 0, 85)
+playersContent.BackgroundTransparency = 1
+playersContent.ScrollBarThickness = 4
+playersContent.CanvasSize = UDim2.new(0, 0, 0, 400)
+playersContent.Visible = false
+playersContent.Parent = mainFrame
+
+-- === ФУНКЦИЯ СОЗДАНИЯ ЭЛЕМЕНТОВ ===
+local function createLabel(parent, text, yPos)
+    local label = Instance.new("TextLabel")
+    label.Size = UDim2.new(1, -20, 0, 30)
+    label.Position = UDim2.new(0, 10, 0, yPos)
+    label.BackgroundColor3 = Color3.fromRGB(40, 40, 50)
+    label.BackgroundTransparency = 0.3
+    label.Text = text
+    label.TextColor3 = Color3.fromRGB(220, 220, 220)
+    label.TextSize = 14
+    label.Font = Enum.Font.Gotham
+    label.TextXAlignment = Enum.TextXAlignment.Left
+    label.TextTruncate = Enum.TextTruncate.AtEnd
+    label.Parent = parent
     
-    log("ERROR", "Failed to load Rayfield after " .. CONFIG.RAYFIELD_RETRY_ATTEMPTS .. " attempts")
-    notify("Error", "Failed to load Rayfield", 5)
-    return nil
+    local labelCorners = Instance.new("UICorner")
+    labelCorners.CornerRadius = UDim.new(0, 6)
+    labelCorners.Parent = label
+    
+    return label
 end
 
-local Rayfield = loadRayfield()
-if not Rayfield or not Rayfield.CreateWindow then
-    log("ERROR", "Rayfield API missing - exiting")
-    _G.MobileHubLoaded = false
-    return
+local function createButton(parent, text, yPos, callback)
+    local btn = Instance.new("TextButton")
+    btn.Size = UDim2.new(1, -20, 0, 40)
+    btn.Position = UDim2.new(0, 10, 0, yPos)
+    btn.BackgroundColor3 = Color3.fromRGB(70, 70, 90)
+    btn.Text = text
+    btn.TextColor3 = Color3.fromRGB(255, 255, 255)
+    btn.TextSize = 15
+    btn.Font = Enum.Font.GothamSemibold
+    btn.Parent = parent
+    
+    local btnCorners = Instance.new("UICorner")
+    btnCorners.CornerRadius = UDim.new(0, 8)
+    btnCorners.Parent = btn
+    
+    btn.MouseButton1Click:Connect(callback)
+    return btn
 end
 
--- === СЕРВИСЫ ===
-local Players = game:GetService("Players")
-local LocalPlayer = Players.LocalPlayer
-local RunService = game:GetService("RunService")
-local Camera = workspace.CurrentCamera
-
--- === ПЕРЕМЕННЫЕ СОСТОЯНИЯ ===
-local currentSpectateTarget = nil
-local spectateConnection = nil
-local originalCameraType = nil
-local originalCameraCFrame = nil
-local isSpectating = false
-local infoLabel = nil
-local lastServerState = {} -- Для дебаунса обновлений
-
--- === СОХРАНЕНИЕ СОСТОЯНИЯ ===
-local function saveState()
-    if currentSpectateTarget and isValidPlayer(currentSpectateTarget) then
-        local state = {
-            lastPlayer = currentSpectateTarget.Name,
-            cameraType = originalCameraType
-        }
-        log("INFO", "State saved: last player was " .. state.lastPlayer)
-    end
-end
-
--- === ОЧИСТКА ПРИ ВЫХОДЕ ===
-local function cleanup()
-    log("INFO", "Cleaning up Mobile Hub")
-    saveState()
+local function createDropdown(parent, items, yPos, callback)
+    local dropdownFrame = Instance.new("Frame")
+    dropdownFrame.Size = UDim2.new(1, -20, 0, 40)
+    dropdownFrame.Position = UDim2.new(0, 10, 0, yPos)
+    dropdownFrame.BackgroundColor3 = Color3.fromRGB(45, 45, 55)
+    dropdownFrame.Parent = parent
     
-    if isSpectating then
-        stopSpectate()
-    end
+    local dropdownCorners = Instance.new("UICorner")
+    dropdownCorners.CornerRadius = UDim.new(0, 8)
+    dropdownCorners.Parent = dropdownFrame
     
-    if spectateConnection then
-        spectateConnection:Disconnect()
-        spectateConnection = nil
-    end
+    local selectedLabel = Instance.new("TextLabel")
+    selectedLabel.Size = UDim2.new(1, -30, 1, 0)
+    selectedLabel.BackgroundTransparency = 1
+    selectedLabel.Text = items[1] or "No players"
+    selectedLabel.TextColor3 = Color3.fromRGB(255, 255, 255)
+    selectedLabel.TextSize = 14
+    selectedLabel.Font = Enum.Font.Gotham
+    selectedLabel.TextXAlignment = Enum.TextXAlignment.Left
+    selectedLabel.Parent = dropdownFrame
     
-    _G.MobileHubLoaded = false
-end
-
--- === РЕГИСТРАЦИЯ ОЧИСТКИ ===
-local function registerCleanup()
-    -- Способ 1: через script (для большинства исполнителей)
-    if script and script.Disabled then
-        script.Disabled:Connect(function()
-            cleanup()
-        end)
-    end
+    local arrow = Instance.new("TextLabel")
+    arrow.Size = UDim2.new(0, 30, 1, 0)
+    arrow.Position = UDim2.new(1, -30, 0, 0)
+    arrow.BackgroundTransparency = 1
+    arrow.Text = "▼"
+    arrow.TextColor3 = Color3.fromRGB(200, 200, 200)
+    arrow.TextSize = 14
+    arrow.Parent = dropdownFrame
     
-    -- Способ 2: через смерть игрока (резервный вариант)
-    local function onPlayerDied()
-        if isSpectating then
-            log("WARN", "Player died, cleaning up spectate")
-            if spectateToggle then
-                spectateToggle:Set(false)
-            else
-                stopSpectate()
+    local dropdownList = Instance.new("Frame")
+    dropdownList.Size = UDim2.new(1, 0, 0, 0)
+    dropdownList.Position = UDim2.new(0, 0, 1, 0)
+    dropdownList.BackgroundColor3 = Color3.fromRGB(35, 35, 45)
+    dropdownList.Visible = false
+    dropdownList.ClipsDescendants = true
+    dropdownList.Parent = dropdownFrame
+    
+    local listCorners = Instance.new("UICorner")
+    listCorners.CornerRadius = UDim.new(0, 8)
+    listCorners.Parent = dropdownList
+    
+    local listLayout = Instance.new("UIListLayout")
+    listLayout.Padding = UDim.new(0, 2)
+    listLayout.Parent = dropdownList
+    
+    local function updateList(newItems)
+        for _, child in ipairs(dropdownList:GetChildren()) do
+            if child:IsA("TextButton") then
+                child:Destroy()
             end
         end
+        
+        for i, item in ipairs(newItems) do
+            local optionBtn = Instance.new("TextButton")
+            optionBtn.Size = UDim2.new(1, 0, 0, 35)
+            optionBtn.BackgroundColor3 = Color3.fromRGB(45, 45, 55)
+            optionBtn.Text = item
+            optionBtn.TextColor3 = Color3.fromRGB(255, 255, 255)
+            optionBtn.TextSize = 13
+            optionBtn.Font = Enum.Font.Gotham
+            optionBtn.Parent = dropdownList
+            
+            optionBtn.MouseButton1Click:Connect(function()
+                selectedLabel.Text = item
+                dropdownList.Visible = false
+                dropdownFrame.Size = UDim2.new(1, -20, 0, 40)
+                callback(item)
+            end)
+        end
+        
+        dropdownList.CanvasSize = UDim2.new(0, 0, 0, #newItems * 37)
     end
     
-    local humanoid = LocalPlayer.Character and LocalPlayer.Character:FindFirstChild("Humanoid")
-    if humanoid then
-        humanoid.Died:Connect(onPlayerDied)
-    else
-        LocalPlayer.CharacterAdded:Connect(function(character)
-            character:WaitForChild("Humanoid").Died:Connect(onPlayerDied)
-        end)
-    end
+    dropdownFrame.MouseButton1Click:Connect(function()
+        if dropdownList.Visible then
+            dropdownList.Visible = false
+            dropdownFrame.Size = UDim2.new(1, -20, 0, 40)
+        else
+            dropdownList.Visible = true
+            dropdownFrame.Size = UDim2.new(1, -20, 0, 40 + math.min(#items * 37, 200))
+        end
+    end)
+    
+    updateList(items)
+    
+    return {
+        update = updateList,
+        getValue = function() return selectedLabel.Text end
+    }
 end
 
--- === КОПИРОВАНИЕ ===
-local function copyToClipboard(text)
-    local success = false
+local function createToggle(parent, text, yPos, callback)
+    local toggleFrame = Instance.new("Frame")
+    toggleFrame.Size = UDim2.new(1, -20, 0, 40)
+    toggleFrame.Position = UDim2.new(0, 10, 0, yPos)
+    toggleFrame.BackgroundColor3 = Color3.fromRGB(45, 45, 55)
+    toggleFrame.Parent = parent
     
+    local toggleCorners = Instance.new("UICorner")
+    toggleCorners.CornerRadius = UDim.new(0, 8)
+    toggleCorners.Parent = toggleFrame
+    
+    local label = Instance.new("TextLabel")
+    label.Size = UDim2.new(1, -50, 1, 0)
+    label.BackgroundTransparency = 1
+    label.Text = text
+    label.TextColor3 = Color3.fromRGB(255, 255, 255)
+    label.TextSize = 14
+    label.Font = Enum.Font.Gotham
+    label.TextXAlignment = Enum.TextXAlignment.Left
+    label.Parent = toggleFrame
+    
+    local toggleBtn = Instance.new("TextButton")
+    toggleBtn.Size = UDim2.new(0, 50, 0, 30)
+    toggleBtn.Position = UDim2.new(1, -55, 0.5, -15)
+    toggleBtn.BackgroundColor3 = Color3.fromRGB(100, 100, 120)
+    toggleBtn.Text = "OFF"
+    toggleBtn.TextColor3 = Color3.fromRGB(255, 255, 255)
+    toggleBtn.TextSize = 12
+    toggleBtn.Font = Enum.Font.GothamBold
+    toggleBtn.Parent = toggleFrame
+    
+    local btnCorners = Instance.new("UICorner")
+    btnCorners.CornerRadius = UDim.new(0, 15)
+    btnCorners.Parent = toggleBtn
+    
+    local state = false
+    
+    toggleBtn.MouseButton1Click:Connect(function()
+        state = not state
+        if state then
+            toggleBtn.BackgroundColor3 = Color3.fromRGB(76, 175, 80)
+            toggleBtn.Text = "ON"
+        else
+            toggleBtn.BackgroundColor3 = Color3.fromRGB(100, 100, 120)
+            toggleBtn.Text = "OFF"
+        end
+        callback(state)
+    end)
+    
+    return {
+        set = function(newState)
+            state = newState
+            if state then
+                toggleBtn.BackgroundColor3 = Color3.fromRGB(76, 175, 80)
+                toggleBtn.Text = "ON"
+            else
+                toggleBtn.BackgroundColor3 = Color3.fromRGB(100, 100, 120)
+                toggleBtn.Text = "OFF"
+            end
+        end
+    }
+end
+
+-- === ПОСТРОЕНИЕ ВКЛАДКИ SERVER ===
+local yOffset = 10
+local jobIdLabel = createLabel(serverContent, "Job ID: Loading...", yOffset)
+yOffset = yOffset + 35
+local playersLabel = createLabel(serverContent, "Players: 0 / 0", yOffset)
+yOffset = yOffset + 35
+local pingLabel = createLabel(serverContent, "Ping: 0 ms", yOffset)
+yOffset = yOffset + 50
+createButton(serverContent, "📋 Copy Job ID", yOffset, function()
     if setclipboard then
-        success = pcall(setclipboard, text)
-    elseif toclipboard then
-        success = pcall(toclipboard, text)
-    elseif writefile then
-        success = pcall(writefile, "temp.txt", text)
-        if success then
-            notify("Saved", "JobId saved to temp.txt")
-            return
-        end
-    end
-    
-    if success then
-        notify("Copied", "JobId: " .. text, 2)
+        setclipboard(game.JobId or "No JobId")
+        notify("Copied", "Job ID copied!", 2)
     else
-        notify("Error", "Copy not supported", 3)
+        notify("Error", "Copy not supported", 2)
     end
-end
+end)
 
--- === ОБНОВЛЕНИЕ ИНФОРМАЦИИ (с дебаунсом) ===
-local function updateServerInfo()
-    pcall(function()
-        local newState = {
-            jobId = game.JobId or "Offline",
-            playerCount = #Players:GetPlayers(),
-            maxPlayers = Players.MaxPlayers,
-            ping = math.floor(LocalPlayer:GetNetworkPing() * 1000)
-        }
-        
-        if newState.jobId ~= lastServerState.jobId then
-            Rayfield:SetElementFlagValue("Server_JobId", newState.jobId)
-            lastServerState.jobId = newState.jobId
+-- === ПОСТРОЕНИЕ ВКЛАДКИ PLAYERS ===
+local dropdownY = 10
+local playersDropdown = nil
+local spectateToggle = nil
+
+-- Кнопка обновления
+createButton(playersContent, "🔄 Refresh Players", dropdownY, function()
+    local names = {}
+    for _, p in ipairs(Players:GetPlayers()) do
+        table.insert(names, p.Name)
+    end
+    if #names == 0 then table.insert(names, "No players") end
+    playersDropdown.update(names)
+end)
+dropdownY = dropdownY + 50
+
+-- Выпадающий список
+playersDropdown = createDropdown(playersContent, {"Loading..."}, dropdownY, function(selected)
+    local player = Players:FindFirstChild(selected)
+    if player then
+        local infoText = string.format(
+            "Name: %s\nDisplay: %s\nAccount Age: %d days\nTeam: %s",
+            player.Name,
+            player.DisplayName or player.Name,
+            player.AccountAge or 0,
+            (player.Team and player.Team.Name) or "No team"
+        )
+        print(infoText)
+        notify("Player Info", player.Name .. ": " .. (player.AccountAge or 0) .. " days", 3)
+    end
+end)
+dropdownY = dropdownY + 50
+
+-- Информационное поле
+local infoFrame = Instance.new("Frame")
+infoFrame.Size = UDim2.new(1, -20, 0, 80)
+infoFrame.Position = UDim2.new(0, 10, 0, dropdownY)
+infoFrame.BackgroundColor3 = Color3.fromRGB(35, 35, 45)
+infoFrame.BackgroundTransparency = 0.5
+infoFrame.Parent = playersContent
+
+local infoCorners = Instance.new("UICorner")
+infoCorners.CornerRadius = UDim.new(0, 8)
+infoCorners.Parent = infoFrame
+
+local infoText = Instance.new("TextLabel")
+infoText.Size = UDim2.new(1, -10, 1, -10)
+infoText.Position = UDim2.new(0, 5, 0, 5)
+infoText.BackgroundTransparency = 1
+infoText.Text = "Select a player from the dropdown"
+infoText.TextColor3 = Color3.fromRGB(180, 180, 180)
+infoText.TextSize = 12
+infoText.Font = Enum.Font.Gotham
+infoText.TextWrapped = true
+infoText.Parent = infoFrame
+dropdownY = dropdownY + 90
+
+-- Spectate toggle
+spectateToggle = createToggle(playersContent, "🔍 Spectate Mode", dropdownY, function(enabled)
+    if enabled then
+        local selectedName = playersDropdown.getValue()
+        local target = Players:FindFirstChild(selectedName)
+        if target and target ~= LocalPlayer then
+            startSpectate(target)
+        else
+            spectateToggle.set(false)
+            notify("Error", "Invalid player selected", 2)
         end
-        
-        if newState.playerCount ~= lastServerState.playerCount or 
-           newState.maxPlayers ~= lastServerState.maxPlayers then
-            Rayfield:SetElementFlagValue("Server_Players", 
-                newState.playerCount .. " / " .. newState.maxPlayers)
-            lastServerState.playerCount = newState.playerCount
-            lastServerState.maxPlayers = newState.maxPlayers
-        end
-        
-        local pingMs = newState.ping .. " ms"
-        if pingMs ~= lastServerState.ping then
-            Rayfield:SetElementFlagValue("Server_Ping", pingMs)
-            lastServerState.ping = pingMs
-        end
-    end)
-end
-
--- === ОБНОВЛЕНИЕ СПИСКА ===
-local function refreshPlayersDropdown()
-    local playerNames = {}
-    for _, player in ipairs(Players:GetPlayers()) do
-        table.insert(playerNames, player.Name)
+    else
+        stopSpectate()
     end
-    
-    if #playerNames == 0 then
-        playerNames = {"No players"}
-    end
-    
-    pcall(function()
-        Rayfield:SetElementFlagValue("Players_Dropdown", {
-            Options = playerNames,
-            CurrentOption = {playerNames[1]}
-        })
-    end)
-end
+end)
 
--- === ИНФОРМАЦИЯ ОБ ИГРОКЕ ===
-local function getPlayerInfo(player)
-    if not isValidPlayer(player) then 
-        return "Player not found or invalid" 
-    end
-    
-    local accountAge = player.AccountAge or 0
-    local displayName = player.DisplayName or player.Name
-    local team = player.Team
-    local teamName = team and team.Name or "No team"
-    
-    return string.format(
-        "Name: %s\nDisplay: %s\nAccount Age: %d days\nTeam: %s",
-        player.Name, displayName, accountAge, teamName
-    )
-end
-
--- === ОСТАНОВКА СПЕКТА ===
-local function stopSpectate()
-    log("INFO", "Stopping spectate")
-    
+-- === ФУНКЦИИ СПЕКТА ===
+function stopSpectate()
     if spectateConnection then
         spectateConnection:Disconnect()
         spectateConnection = nil
@@ -258,45 +453,24 @@ local function stopSpectate()
     
     if isSpectating then
         isSpectating = false
-        
         if originalCameraType then
             Camera.CameraType = originalCameraType
         else
             Camera.CameraType = Enum.CameraType.Custom
         end
-        
         if originalCameraCFrame then
             Camera.CFrame = originalCameraCFrame
         end
-        
         currentSpectateTarget = nil
         notify("Spectate", "Spectate stopped", 2)
     end
 end
 
--- === ЗАПУСК СПЕКТА ===
-local function startSpectate(targetPlayer)
-    if not isValidPlayer(targetPlayer) then
-        log("WARN", "Invalid player for spectate")
-        notify("Error", "Invalid player", 2)
-        return false
-    end
+function startSpectate(target)
+    if isSpectating then stopSpectate() end
     
-    if not game:IsLoaded() or targetPlayer.Parent == nil then
-        log("ERROR", "Game not loaded or player disconnected")
-        notify("Error", "Connection lost", 2)
-        return false
-    end
-    
-    log("INFO", "Starting spectate for " .. targetPlayer.Name)
-    
-    if isSpectating then
-        stopSpectate()
-    end
-    
-    local character = targetPlayer.Character
+    local character = target.Character
     if not character or not character:FindFirstChild("HumanoidRootPart") then
-        log("WARN", "Character not loaded for " .. targetPlayer.Name)
         notify("Error", "Character not loaded", 2)
         return false
     end
@@ -305,7 +479,7 @@ local function startSpectate(targetPlayer)
     originalCameraCFrame = Camera.CFrame
     Camera.CameraType = Enum.CameraType.Scriptable
     
-    currentSpectateTarget = targetPlayer
+    currentSpectateTarget = target
     isSpectating = true
     
     spectateConnection = RunService.RenderStepped:Connect(function()
@@ -313,163 +487,66 @@ local function startSpectate(targetPlayer)
             stopSpectate()
             return
         end
-        
         local char = currentSpectateTarget.Character
-        if not char then
-            stopSpectate()
-            return
-        end
-        
+        if not char then stopSpectate() return end
         local root = char:FindFirstChild("HumanoidRootPart")
-        if not root then
-            stopSpectate()
-            return
-        end
-        
-        local targetCFrame = root.CFrame + root.CFrame.UpVector * CONFIG.CAMERA_OFFSET
-        Camera.CFrame = Camera.CFrame:Lerp(targetCFrame, CONFIG.CAMERA_LERP_SPEED)
+        if not root then stopSpectate() return end
+        local targetCFrame = root.CFrame + root.CFrame.UpVector * 2.5
+        Camera.CFrame = Camera.CFrame:Lerp(targetCFrame, 0.25)
     end)
     
-    notify("Spectate", "Spectating: " .. targetPlayer.Name, 2)
+    notify("Spectate", "Spectating: " .. target.Name, 2)
     return true
 end
 
--- === ВЫВОД ИНФОРМАЦИИ ===
-local function showPlayerInfo(playerName)
-    local player = Players:FindFirstChild(playerName)
-    if not isValidPlayer(player) then
-        log("WARN", "Player not found: " .. tostring(playerName))
-        notify("Error", "Player not found", 2)
-        return
-    end
-    
-    local infoText = getPlayerInfo(player)
-    log("INFO", "Displaying info for " .. player.Name)
-    print(infoText)
-    
-    if infoLabel then
-        pcall(function()
-            infoLabel:Set(infoText)
-        end)
-    else
-        pcall(function()
-            Rayfield:SetElementFlagValue("Player_Info_Text", infoText)
-        end)
-    end
-    
-    notify("Player Info", player.Name .. ": " .. player.AccountAge .. " days", 3)
+-- === ОБНОВЛЕНИЕ ИНФОРМАЦИИ ===
+local function updateServerInfo()
+    pcall(function()
+        jobIdLabel.Text = "Job ID: " .. (game.JobId or "Offline")
+        playersLabel.Text = "Players: " .. #Players:GetPlayers() .. " / " .. Players.MaxPlayers
+        pingLabel.Text = "Ping: " .. math.floor(LocalPlayer:GetNetworkPing() * 1000) .. " ms"
+    end)
 end
 
--- === СОЗДАНИЕ UI ===
-local Window = Rayfield:CreateWindow({
-    Name = "Mobile Hub v5.0",
-    Icon = 0,
-    LoadingTitle = "Loading",
-    LoadingSubtitle = "Production Ready",
-    Theme = "Dark",
-    ToggleUIKeybind = CONFIG.TOGGLE_UI_KEY,
-    ConfigurationSaving = { Enabled = false },
-    KeySystem = false
-})
-
--- === ВКЛАДКА SERVER ===
-local ServerTab = Window:CreateTab("Server", nil)
-ServerTab:CreateSection("Server Info")
-ServerTab:CreateParagraph({ Name = "Job ID", Flag = "Server_JobId", Value = "Loading..." })
-ServerTab:CreateParagraph({ Name = "Players", Flag = "Server_Players", Value = "0 / 0" })
-ServerTab:CreateParagraph({ Name = "Ping", Flag = "Server_Ping", Value = "0 ms" })
-ServerTab:CreateButton({
-    Name = "Copy JobId",
-    Flag = "CopyJobId",
-    Callback = function()
-        copyToClipboard(game.JobId or "No JobId")
+local function updatePlayersList()
+    local names = {}
+    for _, p in ipairs(Players:GetPlayers()) do
+        table.insert(names, p.Name)
     end
-})
-
--- === ВКЛАДКА PLAYERS ===
-local PlayersTab = Window:CreateTab("Players", nil)
-PlayersTab:CreateSection("Management")
-PlayersTab:CreateButton({
-    Name = "Refresh List",
-    Flag = "RefreshPlayers",
-    Callback = refreshPlayersDropdown
-})
-
-PlayersTab:CreateDropdown({
-    Name = "Select Player",
-    Flag = "Players_Dropdown",
-    Options = {"Loading..."},
-    CurrentOption = {"Loading..."},
-    MultipleOptions = false,
-    Callback = function(selected)
-        if selected and #selected > 0 then
-            showPlayerInfo(selected[1])
-        end
+    if #names == 0 then table.insert(names, "No players") end
+    if playersDropdown then
+        playersDropdown.update(names)
     end
-})
-
-infoLabel = PlayersTab:CreateParagraph({
-    Name = "Player Info",
-    Flag = "Player_Info_Text",
-    Value = "Select a player from the list"
-})
-
-local spectateToggle = PlayersTab:CreateToggle({
-    Name = "Spectate",
-    Flag = "SpectateToggle",
-    CurrentValue = false,
-    Callback = function(enabled)
-        if enabled then
-            local dropdown = Rayfield:GetElementFlagValue("Players_Dropdown")
-            if dropdown and #dropdown > 0 then
-                local target = Players:FindFirstChild(dropdown[1])
-                if target then
-                    startSpectate(target)
-                else
-                    spectateToggle:Set(false)
-                    log("WARN", "Target player not found")
-                    notify("Error", "Player not found", 2)
-                end
-            else
-                spectateToggle:Set(false)
-                notify("Error", "Select a player first", 2)
-            end
-        else
-            stopSpectate()
-        end
-    end
-})
+end
 
 -- === СОБЫТИЯ ===
-local lastServerUpdate = 0
-RunService.Heartbeat:Connect(function()
-    if tick() - lastServerUpdate >= CONFIG.UPDATE_SERVER_INTERVAL then
+task.spawn(function()
+    while task.wait(2) do
         updateServerInfo()
-        lastServerUpdate = tick()
     end
 end)
 
-Players.PlayerAdded:Connect(function()
-    log("INFO", "Player added, refreshing dropdown")
-    refreshPlayersDropdown()
-end)
+Players.PlayerAdded:Connect(updatePlayersList)
+Players.PlayerRemoving:Connect(updatePlayersList)
 
 Players.PlayerRemoving:Connect(function(player)
-    log("INFO", "Player removed: " .. player.Name)
-    refreshPlayersDropdown()
     if currentSpectateTarget == player then
-        if spectateToggle then
-            spectateToggle:Set(false)
-        else
-            stopSpectate()
-        end
+        if spectateToggle then spectateToggle.set(false) else stopSpectate() end
     end
 end)
 
--- === ЗАПУСК ===
-task.wait(0.5)
+-- === ОТКРЫТИЕ/ЗАКРЫТИЕ ПО K ===
+UserInputService.InputBegan:Connect(function(input, gameProcessed)
+    if gameProcessed then return end
+    if input.KeyCode == Enum.KeyCode.K then
+        guiEnabled = not guiEnabled
+        mainFrame.Visible = guiEnabled
+        notify("GUI", guiEnabled and "Menu shown" or "Menu hidden", 1)
+    end
+end)
+
+-- === ИНИЦИАЛИЗАЦИЯ ===
 updateServerInfo()
-refreshPlayersDropdown()
-registerCleanup()
-log("INFO", "Mobile Hub v5.0 loaded successfully!")
-notify("Ready", "Mobile Hub v5.0 loaded! Press K to toggle UI", 3)
+updatePlayersList()
+notify("Ready", "Mobile Hub v6.0 loaded! Press K to open", 3)
+log("Mobile Hub v6.0 loaded successfully!")
