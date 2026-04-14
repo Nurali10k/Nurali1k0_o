@@ -1,0 +1,182 @@
+local Players = game:GetService("Players")<br />
+local ReplicatedStorage = game:GetService("ReplicatedStorage")<br />
+local RunService = game:GetService("RunService")<br />
+<br />
+local plr = Players.LocalPlayer<br />
+local currentCamera = workspace.CurrentCamera<br />
+<br />
+local function createESP(part:BasePart, color, infos)<br />
+	local BillboardGui = Instance.new("BillboardGui", part)<br />
+	BillboardGui.Size = UDim2.new(5,0,5,0)<br />
+	BillboardGui.AlwaysOnTop = true<br />
+<br />
+	local Frame = Instance.new("Frame", BillboardGui)<br />
+	Frame.BackgroundColor3 = color<br />
+	Frame.BorderSizePixel = 0<br />
+	Frame.Transparency = 0.5<br />
+	Frame.Size = UDim2.new(1,0,1,0)<br />
+<br />
+	local UIListLayout = Instance.new("UIListLayout", Frame)<br />
+	UIListLayout.HorizontalFlex = Enum.UIFlexAlignment.Fill<br />
+	UIListLayout.VerticalFlex = Enum.UIFlexAlignment.Fill<br />
+	UIListLayout.HorizontalAlignment = Enum.HorizontalAlignment.Center<br />
+	UIListLayout.VerticalAlignment = Enum.VerticalAlignment.Center<br />
+<br />
+	local UIPadding = Instance.new("UIPadding", Frame)<br />
+	UIPadding.PaddingBottom = UDim.new(0.04, 0)<br />
+	UIPadding.PaddingLeft = UDim.new(0.04, 0)<br />
+	UIPadding.PaddingRight = UDim.new(0.04, 0)<br />
+	UIPadding.PaddingTop = UDim.new(0.04, 0)<br />
+<br />
+	for _, string in pairs(infos) do<br />
+		local label = Instance.new("TextLabel", Frame)<br />
+		label.Text = string<br />
+		label.TextScaled = true<br />
+		label.FontFace.Bold = true<br />
+		label.BackgroundTransparency = 1<br />
+		label.TextColor3 = Color3.new(1,1,1)<br />
+	end<br />
+<br />
+	return BillboardGui<br />
+end<br />
+<br />
+local function getCharacter()<br />
+	return plr.Character or plr.CharacterAdded:Wait()<br />
+end<br />
+<br />
+local function tpChar(Position:Vector3)<br />
+	local char = getCharacter()<br />
+	char:MoveTo(Position)<br />
+end<br />
+<br />
+local function determineRole(char:Model)<br />
+	local success, result = pcall(function()<br />
+		if char:GetAttribute("LivesGiven") then<br />
+			if char:GetAttribute("LivesGiven") > 1 then<br />
+				return "sheriff"<br />
+			else<br />
+				return "criminal"<br />
+			end<br />
+		else<br />
+			return "npc"<br />
+		end<br />
+	end)<br />
+	if success then return result end<br />
+end<br />
+<br />
+local function getCharacters()<br />
+	local results = {}<br />
+	for _, v in pairs(workspace:GetChildren()) do<br />
+		if v:IsA("Model") and v:FindFirstChild("Humanoid") then<br />
+			local role = determineRole(v)<br />
+			results[v] = role<br />
+		end<br />
+	end<br />
+	return results<br />
+end<br />
+<br />
+local function cleanESP(espTable)<br />
+	for _, v in pairs(espTable) do<br />
+		local success, result = pcall(function()<br />
+			v:Destroy()<br />
+		end)<br />
+		if not success then warn(result) end<br />
+	end<br />
+end<br />
+<br />
+local function getCharactersWithRole(role:string)<br />
+	local allCharacters = getCharacters()<br />
+	local results = {}<br />
+	for character, cRole in pairs(allCharacters) do<br />
+		local humanoid:Humanoid = character.Humanoid<br />
+		if cRole == role then<br />
+			table.insert(results, character)<br />
+		end<br />
+	end<br />
+	<br />
+	return results<br />
+end<br />
+<br />
+local Module_Aimbot = loadstring(game:HttpGet("https://raw.githubusercontent.com/caelmn/myscripts/refs/heads/main/Aimbot.lua"))()<br />
+<br />
+--// UI Setup<br />
+local UILib = loadstring(game:HttpGet("https://raw.githubusercontent.com/xHeptc/Kavo-UI-Library/main/source.lua"))() -- https://xheptcofficial.gitbook.io/kavo-library<br />
+local Window = UILib.CreateLib("NPC or Die | By Nullix", "DarkTheme")<br />
+<br />
+local tab_Game = Window:NewTab("Game")<br />
+local tab_Visual = Window:NewTab("Visual")<br />
+local tab_Character = Window:NewTab("Character")<br />
+<br />
+local game_Section_Aimbot = tab_Game:NewSection("Aimbot")<br />
+local visual_Section_Main = tab_Visual:NewSection("Main")<br />
+local character_Section_Main = tab_Character:NewSection("Main")<br />
+<br />
+--== Buttons n stuff ==--<br />
+<br />
+--//GAME<br />
+<br />
+--aimbot<br />
+<br />
+local crim_Aimbot = Module_Aimbot.new()<br />
+<br />
+game_Section_Aimbot:NewToggle("Criminal Aimbot", "Aimbot on all the Criminals.", function(state)<br />
+	if state then<br />
+		local criminals = getCharactersWithRole("criminal")<br />
+		crim_Aimbot:lockOnCharacters(criminals)<br />
+	else<br />
+		crim_Aimbot:stop()<br />
+	end<br />
+end)<br />
+<br />
+game_Section_Aimbot:NewToggle("Raycast", "Raycast to check if the Criminals are visible.", function(state)<br />
+	crim_Aimbot.raycastEnabled = state<br />
+end)<br />
+<br />
+--//VISUAL<br />
+<br />
+local esp_Criminal = {}<br />
+visual_Section_Main:NewToggle("Criminal ESP", "See all of the Criminals.", function(state)<br />
+	if state then<br />
+		local criminals = getCharactersWithRole("criminal")<br />
+		for _, character in pairs(criminals) do<br />
+			local esp = createESP(character.PrimaryPart, Color3.new(1, 0.615686, 0), {character.Name, "Criminal"})<br />
+			table.insert(esp_Criminal, esp)<br />
+		end<br />
+	else<br />
+		cleanESP(esp_Criminal)<br />
+	end<br />
+end)<br />
+<br />
+local esp_Sheriff = {}<br />
+visual_Section_Main:NewToggle("Sheriff ESP", "See all of the Sherrifs.", function(state)<br />
+	if state then<br />
+		local sheriffs = getCharactersWithRole("sheriff")<br />
+		for _, character in pairs(sheriffs) do<br />
+			local esp = createESP(character.PrimaryPart, Color3.new(0, 0.34902, 1), {character.Name, "Sheriff"})<br />
+			table.insert(esp_Sheriff, esp)<br />
+		end<br />
+	else<br />
+		cleanESP(esp_Sheriff)<br />
+	end<br />
+end)<br />
+<br />
+-- character<br />
+<br />
+local staminaLock = false<br />
+character_Section_Main:NewToggle("Infinite Stamina", "Never run out of stamina.", function(state)<br />
+	staminaLock = state<br />
+	if staminaLock then<br />
+		local sprintMod = plr.PlayerGui.Modules.Gameplay.Stamina<br />
+		local sprint = require(sprintMod)<br />
+		task.spawn(function()<br />
+			while staminaLock do<br />
+				if sprintMod then<br />
+					sprint.StaminaPercentage = 100<br />
+					task.wait(0.1)<br />
+				else<br />
+					sprint = require(plr.PlayerGui.Modules.Gameplay.Stamina)<br />
+				end<br />
+			end<br />
+		end)<br />
+	end<br />
+end)
