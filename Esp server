@@ -1,159 +1,171 @@
 --[[
-    Mobile Hub v7.0
-    - Удобный интерфейс с вкладками
-    - Кнопки X (полное закрытие) и - (сворачивание в иконку)
-    - Перетаскивание окна
-    - Исправлено пропадание GUI
-    - Оптимизировано для мобильных устройств
+    Nur Hub v9.0 (Clean Rewrite)
+    - Исправлены все баги из ревью
+    - Event-driven cleanup
+    - Полный набор функций
 --]]
 
-if _G.MobileHubLoaded then
-    game:GetService("StarterGui"):SetCore("SendNotification", {Title = "Error", Text = "Mobile Hub already running", Duration = 3})
+if _G.NurHubLoaded then
+    game:GetService("StarterGui"):SetCore("SendNotification", {Title = "Error", Text = "Nur Hub already running", Duration = 3})
     return
 end
-_G.MobileHubLoaded = true
+_G.NurHubLoaded = true
 
--- СЕРВИСЫ
-local Players = game:GetService("Players")
-local LocalPlayer = Players.LocalPlayer
-local RunService = game:GetService("RunService")
-local Camera = workspace.CurrentCamera
-local UserInputService = game:GetService("UserInputService")
-local TweenService = game:GetService("TweenService")
+-- ============ СЕРВИСЫ ============
+local Players           = game:GetService("Players")
+local RunService        = game:GetService("RunService")
+local UserInputService  = game:GetService("UserInputService")
+local TweenService      = game:GetService("TweenService")
+local TeleportService   = game:GetService("TeleportService")
+local Stats             = game:GetService("Stats")
+local StarterGui        = game:GetService("StarterGui")
+local HttpService       = game:GetService("HttpService")
+local LocalPlayer       = Players.LocalPlayer
+local Camera            = workspace.CurrentCamera
 
--- ПЕРЕМЕННЫЕ
-local currentSpectateTarget = nil
-local spectateConnection = nil
-local originalCameraType = nil
-local originalCameraCFrame = nil
-local isSpectating = false
-local guiMinimized = false   -- свернуто ли в иконку
-local minimizedIcon = nil     -- иконка в свернутом состоянии
-local mainFrame = nil
+-- ============ ТРЕКЕР CONNECTIONS ============
+-- Всё, что подключается, регистрируется здесь и рвётся при unload
+local Connections = {}
+local function track(conn)
+    table.insert(Connections, conn)
+    return conn
+end
+local function disconnectAll()
+    for _, c in ipairs(Connections) do
+        pcall(function() c:Disconnect() end)
+    end
+    Connections = {}
+end
 
--- ВСПОМОГАТЕЛЬНЫЕ ФУНКЦИИ
-local function notify(title, text, duration)
-    duration = duration or 3
+-- ============ КОНФИГ ============
+local CONFIG = {
+    DEFAULT_SPEED      = 16,
+    DEFAULT_JUMP       = 50,
+    FLY_SPEED          = 60,
+    SPEC_LERP          = 0.25,
+    SPEC_OFFSET        = 2.5,
+    NOTIFY_DURATION    = 3,
+}
+
+-- ============ УТИЛИТЫ ============
+local function notify(title, text)
     pcall(function()
-        game:GetService("StarterGui"):SetCore("SendNotification", {Title = title, Text = text, Duration = duration})
+        StarterGui:SetCore("SendNotification", {
+            Title = title, Text = text, Duration = CONFIG.NOTIFY_DURATION
+        })
     end)
+    print("[" .. title .. "] " .. text)
 end
 
-local function log(msg) print("[MobileHub] " .. msg) end
+local function log(msg) print("[NurHub] " .. msg) end
 
--- ФУНКЦИИ СПЕКТА
-function stopSpectate()
-    if spectateConnection then spectateConnection:Disconnect() spectateConnection = nil end
-    if isSpectating then
-        isSpectating = false
-        if originalCameraType then Camera.CameraType = originalCameraType else Camera.CameraType = Enum.CameraType.Custom end
-        if originalCameraCFrame then Camera.CFrame = originalCameraCFrame end
-        currentSpectateTarget = nil
-        notify("Spectate", "Spectate stopped", 2)
-    end
-end
-
-function startSpectate(target)
-    if isSpectating then stopSpectate() end
-    local character = target.Character
-    if not character or not character:FindFirstChild("HumanoidRootPart") then
-        notify("Error", "Character not loaded", 2)
-        return false
-    end
-    originalCameraType = Camera.CameraType
-    originalCameraCFrame = Camera.CFrame
-    Camera.CameraType = Enum.CameraType.Scriptable
-    currentSpectateTarget = target
-    isSpectating = true
-    spectateConnection = RunService.RenderStepped:Connect(function()
-        if not isSpectating or not currentSpectateTarget then stopSpectate() return end
-        local char = currentSpectateTarget.Character
-        if not char then stopSpectate() return end
-        local root = char:FindFirstChild("HumanoidRootPart")
-        if not root then stopSpectate() return end
-        local targetCFrame = root.CFrame + root.CFrame.UpVector * 2.5
-        Camera.CFrame = Camera.CFrame:Lerp(targetCFrame, 0.25)
+-- Исправлено: ping через Stats (работает везде)
+local function getPing()
+    local ping = 0
+    pcall(function()
+        ping = math.floor(Stats.Network.ServerStatsItem["Data Ping"]:GetValue())
     end)
-    notify("Spectate", "Spectating: " .. target.Name, 2)
-    return true
+    return ping
 end
 
--- СОЗДАНИЕ GUI
+-- Безопасное копирование
+local function copyText(text)
+    if setclipboard then
+        pcall(setclipboard, text)
+        notify("Copied", tostring(text))
+        return true
+    elseif toclipboard then
+        pcall(toclipboard, text)
+        notify("Copied", tostring(text))
+        return true
+    end
+    notify("Error", "Clipboard not supported")
+    return false
+end
+
+-- Безопасное получение Humanoid
+local function getHumanoid(plr)
+    if not plr or not plr.Character then return nil end
+    return plr.Character:FindFirstChildOfClass("Humanoid")
+end
+
+local function getRoot(plr)
+    if not plr or not plr.Character then return nil end
+    return plr.Character:FindFirstChild("HumanoidRootPart")
+end
+
+-- ============ GUI CONTAINER ============
+local GUI_PARENT
+pcall(function()
+    GUI_PARENT = gethui and gethui() or game:GetService("CoreGui")
+end)
+if not GUI_PARENT then
+    GUI_PARENT = LocalPlayer:WaitForChild("PlayerGui")
+end
+
 local screenGui = Instance.new("ScreenGui")
-screenGui.Name = "MobileHubGUI"
+screenGui.Name = "NurHubGUI_" .. HttpService:GenerateGUID(false)
 screenGui.ResetOnSpawn = false
-screenGui.Parent = game:GetService("CoreGui")
+screenGui.IgnoreGuiInset = true
+screenGui.ZIndexBehavior = Enum.ZIndexBehavior.Sibling
+screenGui.Parent = GUI_PARENT
 
--- === ОСНОВНОЕ ОКНО ===
-mainFrame = Instance.new("Frame")
-mainFrame.Size = UDim2.new(0, 360, 0, 520)
-mainFrame.Position = UDim2.new(0.5, -180, 0.5, -260)
-mainFrame.BackgroundColor3 = Color3.fromRGB(20, 20, 30)
-mainFrame.BackgroundTransparency = 0.1
+-- ============ ГЛАВНОЕ ОКНО ============
+local mainFrame = Instance.new("Frame")
+mainFrame.Name = "MainFrame"
+mainFrame.Size = UDim2.new(0, 340, 0, 500)
+mainFrame.Position = UDim2.new(0.5, -170, 0.5, -250)
+mainFrame.BackgroundColor3 = Color3.fromRGB(18, 22, 30)
 mainFrame.BorderSizePixel = 0
+mainFrame.Active = true
+mainFrame.Draggable = true
 mainFrame.ClipsDescendants = true
 mainFrame.Parent = screenGui
--- Скругление
+
 local mainCorner = Instance.new("UICorner")
 mainCorner.CornerRadius = UDim.new(0, 12)
 mainCorner.Parent = mainFrame
 
--- Возможность перетаскивания
-local dragging = false
-local dragStartPos, dragStartMouse
+local mainStroke = Instance.new("UIStroke")
+mainStroke.Color = Color3.fromRGB(50, 80, 120)
+mainStroke.Thickness = 1
+mainStroke.Transparency = 0.4
+mainStroke.Parent = mainFrame
 
-mainFrame.InputBegan:Connect(function(input)
-    if input.UserInputType == Enum.UserInputType.Touch or input.UserInputType == Enum.UserInputType.MouseButton1 then
-        dragging = true
-        dragStartPos = mainFrame.Position
-        dragStartMouse = input.Position
-    end
-end)
-UserInputService.InputChanged:Connect(function(input)
-    if dragging and (input.UserInputType == Enum.UserInputType.Touch or input.UserInputType == Enum.UserInputType.MouseMovement) then
-        local delta = input.Position - dragStartMouse
-        mainFrame.Position = UDim2.new(dragStartPos.X.Scale, dragStartPos.X.Offset + delta.X, dragStartPos.Y.Scale, dragStartPos.Y.Offset + delta.Y)
-    end
-end)
-UserInputService.InputEnded:Connect(function(input)
-    if input.UserInputType == Enum.UserInputType.Touch or input.UserInputType == Enum.UserInputType.MouseButton1 then
-        dragging = false
-    end
-end)
-
--- === ВЕРХНЯЯ ПАНЕЛЬ С КНОПКАМИ ===
+-- ============ ЗАГОЛОВОК ============
 local titleBar = Instance.new("Frame")
 titleBar.Size = UDim2.new(1, 0, 0, 45)
-titleBar.BackgroundColor3 = Color3.fromRGB(35, 35, 45)
+titleBar.BackgroundColor3 = Color3.fromRGB(28, 34, 44)
 titleBar.BorderSizePixel = 0
 titleBar.Parent = mainFrame
+
 local titleCorner = Instance.new("UICorner")
 titleCorner.CornerRadius = UDim.new(0, 12)
 titleCorner.Parent = titleBar
 
 local titleText = Instance.new("TextLabel")
-titleText.Size = UDim2.new(1, -100, 1, 0)
-titleText.Position = UDim2.new(0, 10, 0, 0)
+titleText.Size = UDim2.new(1, -90, 1, 0)
+titleText.Position = UDim2.new(0, 12, 0, 0)
 titleText.BackgroundTransparency = 1
-titleText.Text = "⚡ NURALI HUB v7.0"
+titleText.Text = "🐍 NUR HUB v9.0"
 titleText.TextColor3 = Color3.fromRGB(255, 255, 255)
-titleText.TextSize = 18
+titleText.TextSize = 17
 titleText.Font = Enum.Font.GothamBold
 titleText.TextXAlignment = Enum.TextXAlignment.Left
 titleText.Parent = titleBar
 
--- Кнопка "-" (свернуть)
-local minimizeBtn = Instance.new("TextButton")
-minimizeBtn.Size = UDim2.new(0, 35, 1, 0)
-minimizeBtn.Position = UDim2.new(1, -70, 0, 0)
-minimizeBtn.BackgroundTransparency = 1
-minimizeBtn.Text = "−"
-minimizeBtn.TextColor3 = Color3.fromRGB(255, 255, 255)
-minimizeBtn.TextSize = 24
-minimizeBtn.Font = Enum.Font.GothamBold
-minimizeBtn.Parent = titleBar
+-- Кнопка свернуть
+local minBtn = Instance.new("TextButton")
+minBtn.Size = UDim2.new(0, 35, 1, 0)
+minBtn.Position = UDim2.new(1, -70, 0, 0)
+minBtn.BackgroundTransparency = 1
+minBtn.Text = "−"
+minBtn.TextColor3 = Color3.fromRGB(255, 255, 255)
+minBtn.TextSize = 24
+minBtn.Font = Enum.Font.GothamBold
+minBtn.Parent = titleBar
 
--- Кнопка "X" (полное закрытие)
+-- Кнопка закрыть
 local closeBtn = Instance.new("TextButton")
 closeBtn.Size = UDim2.new(0, 35, 1, 0)
 closeBtn.Position = UDim2.new(1, -35, 0, 0)
@@ -164,476 +176,743 @@ closeBtn.TextSize = 20
 closeBtn.Font = Enum.Font.GothamBold
 closeBtn.Parent = titleBar
 
--- === ИКОНКА ДЛЯ СВЕРНУТОГО СОСТОЯНИЯ ===
-local function createMinimizedIcon()
-    local icon = Instance.new("Frame")
-    icon.Size = UDim2.new(0, 60, 0, 60)
-    icon.Position = UDim2.new(0, 20, 1, -80)
-    icon.BackgroundColor3 = Color3.fromRGB(35, 35, 45)
-    icon.BackgroundTransparency = 0.1
-    icon.BorderSizePixel = 0
-    icon.Visible = false
-    icon.Parent = screenGui
-    local iconCorner = Instance.new("UICorner")
-    iconCorner.CornerRadius = UDim.new(0, 30)
-    iconCorner.Parent = icon
-    
-    local iconLabel = Instance.new("TextLabel")
-    iconLabel.Size = UDim2.new(1, 0, 1, 0)
-    iconLabel.BackgroundTransparency = 1
-    iconLabel.Text = "⚡"
-    iconLabel.TextColor3 = Color3.fromRGB(255, 255, 255)
-    iconLabel.TextSize = 30
-    iconLabel.Font = Enum.Font.GothamBold
-    iconLabel.Parent = icon
-    
-    icon.InputBegan:Connect(function(input)
-        if input.UserInputType == Enum.UserInputType.Touch or input.UserInputType == Enum.UserInputType.MouseButton1 then
-            -- Разворачиваем GUI
-            guiMinimized = false
-            icon.Visible = false
-            mainFrame.Visible = true
-            -- Обновляем данные
-            updateServerInfo()
-            updatePlayersList()
-            notify("GUI", "Window restored", 1)
-        end
-    end)
-    return icon
-end
+-- ============ ИКОНКА СВЁРНУТОГО РЕЖИМА ============
+local miniIcon = Instance.new("TextButton")
+miniIcon.Size = UDim2.new(0, 55, 0, 55)
+miniIcon.Position = UDim2.new(0, 15, 0, 80)
+miniIcon.BackgroundColor3 = Color3.fromRGB(28, 34, 44)
+miniIcon.Text = "🐍"
+miniIcon.TextColor3 = Color3.fromRGB(255, 255, 255)
+miniIcon.TextSize = 26
+miniIcon.Font = Enum.Font.GothamBold
+miniIcon.Visible = false
+miniIcon.Active = true
+miniIcon.Draggable = true
+miniIcon.Parent = screenGui
 
-minimizedIcon = createMinimizedIcon()
+local miniIconCorner = Instance.new("UICorner")
+miniIconCorner.CornerRadius = UDim.new(0, 28)
+miniIconCorner.Parent = miniIcon
 
--- Логика сворачивания
-minimizeBtn.MouseButton1Click:Connect(function()
-    guiMinimized = true
-    mainFrame.Visible = false
-    minimizedIcon.Visible = true
-    notify("GUI", "Minimized. Tap the ⚡ icon to restore", 2)
-end)
+local miniStroke = Instance.new("UIStroke")
+miniStroke.Color = Color3.fromRGB(50, 80, 120)
+miniStroke.Thickness = 1
+miniStroke.Transparency = 0.4
+miniStroke.Parent = miniIcon
 
--- Логика полного закрытия
-closeBtn.MouseButton1Click:Connect(function()
-    -- Полностью удаляем GUI и выгружаем скрипт
-    if isSpectating then stopSpectate() end
-    screenGui:Destroy()
-    _G.MobileHubLoaded = false
-    notify("GUI", "Mobile Hub closed", 2)
-    log("Mobile Hub closed by user")
-end)
-
--- === ВКЛАДКИ ===
+-- ============ ВКЛАДКИ ============
 local tabBar = Instance.new("Frame")
-tabBar.Size = UDim2.new(1, 0, 0, 45)
+tabBar.Size = UDim2.new(1, 0, 0, 40)
 tabBar.Position = UDim2.new(0, 0, 0, 45)
-tabBar.BackgroundColor3 = Color3.fromRGB(30, 30, 40)
+tabBar.BackgroundColor3 = Color3.fromRGB(22, 27, 36)
 tabBar.BorderSizePixel = 0
 tabBar.Parent = mainFrame
 
-local buttons = {}
-local contents = {}
+local TAB_LIST = {"SERVER", "PLAYERS", "FEATURES", "SETTINGS"}
+local tabs, tabContents = {}, {}
+local tabWidth = 0.25
 
-local function switchTab(tabName)
-    for name, btn in pairs(buttons) do
-        btn.TextColor3 = (name == tabName) and Color3.fromRGB(255, 255, 255) or Color3.fromRGB(160, 160, 160)
+for i, name in ipairs(TAB_LIST) do
+    local btn = Instance.new("TextButton")
+    btn.Size = UDim2.new(tabWidth, 0, 1, 0)
+    btn.Position = UDim2.new((i - 1) * tabWidth, 0, 0, 0)
+    btn.BackgroundTransparency = 1
+    btn.Text = name
+    btn.TextColor3 = (i == 1) and Color3.fromRGB(80, 180, 255) or Color3.fromRGB(140, 140, 140)
+    btn.TextSize = 12
+    btn.Font = Enum.Font.GothamSemibold
+    btn.Parent = tabBar
+    tabs[name] = btn
+
+    local content = Instance.new("ScrollingFrame")
+    content.Size = UDim2.new(1, 0, 1, -85)
+    content.Position = UDim2.new(0, 0, 0, 85)
+    content.BackgroundTransparency = 1
+    content.BorderSizePixel = 0
+    content.ScrollBarThickness = 4
+    content.ScrollBarImageColor3 = Color3.fromRGB(60, 90, 130)
+    content.CanvasSize = UDim2.new(0, 0, 0, 500)
+    content.Visible = (i == 1)
+    content.Parent = mainFrame
+    tabContents[name] = content
+end
+
+local function switchTab(name)
+    for n, btn in pairs(tabs) do
+        btn.TextColor3 = (n == name) and Color3.fromRGB(80, 180, 255) or Color3.fromRGB(140, 140, 140)
     end
-    for name, cont in pairs(contents) do
-        cont.Visible = (name == tabName)
+    for n, c in pairs(tabContents) do
+        c.Visible = (n == name)
     end
 end
 
--- SERVER TAB
-local serverTabBtn = Instance.new("TextButton")
-serverTabBtn.Size = UDim2.new(0.25, 0, 1, 0)
-serverTabBtn.BackgroundTransparency = 1
-serverTabBtn.Text = "SERVER"
-serverTabBtn.TextColor3 = Color3.fromRGB(255, 255, 255)
-serverTabBtn.TextSize = 14
-serverTabBtn.Font = Enum.Font.GothamSemibold
-serverTabBtn.Parent = tabBar
-buttons["SERVER"] = serverTabBtn
-
-local serverContent = Instance.new("ScrollingFrame")
-serverContent.Size = UDim2.new(1, 0, 1, -90)
-serverContent.Position = UDim2.new(0, 0, 0, 90)
-serverContent.BackgroundTransparency = 1
-serverContent.ScrollBarThickness = 4
-serverContent.CanvasSize = UDim2.new(0, 0, 0, 250)
-serverContent.Parent = mainFrame
-contents["SERVER"] = serverContent
-
--- PLAYERS TAB
-local playersTabBtn = Instance.new("TextButton")
-playersTabBtn.Size = UDim2.new(0.25, 0, 1, 0)
-playersTabBtn.Position = UDim2.new(0.25, 0, 0, 0)
-playersTabBtn.BackgroundTransparency = 1
-playersTabBtn.Text = "PLAYERS"
-playersTabBtn.TextColor3 = Color3.fromRGB(160, 160, 160)
-playersTabBtn.TextSize = 14
-playersTabBtn.Font = Enum.Font.GothamSemibold
-playersTabBtn.Parent = tabBar
-buttons["PLAYERS"] = playersTabBtn
-
-local playersContent = Instance.new("ScrollingFrame")
-playersContent.Size = UDim2.new(1, 0, 1, -90)
-playersContent.Position = UDim2.new(0, 0, 0, 90)
-playersContent.BackgroundTransparency = 1
-playersContent.ScrollBarThickness = 4
-playersContent.CanvasSize = UDim2.new(0, 0, 0, 450)
-playersContent.Visible = false
-playersContent.Parent = mainFrame
-contents["PLAYERS"] = playersContent
-
--- FEATURES TAB (заглушка)
-local featuresTabBtn = Instance.new("TextButton")
-featuresTabBtn.Size = UDim2.new(0.25, 0, 1, 0)
-featuresTabBtn.Position = UDim2.new(0.5, 0, 0, 0)
-featuresTabBtn.BackgroundTransparency = 1
-featuresTabBtn.Text = "FEATURES"
-featuresTabBtn.TextColor3 = Color3.fromRGB(160, 160, 160)
-featuresTabBtn.TextSize = 14
-featuresTabBtn.Font = Enum.Font.GothamSemibold
-featuresTabBtn.Parent = tabBar
-buttons["FEATURES"] = featuresTabBtn
-
-local featuresContent = Instance.new("ScrollingFrame")
-featuresContent.Size = UDim2.new(1, 0, 1, -90)
-featuresContent.Position = UDim2.new(0, 0, 0, 90)
-featuresContent.BackgroundTransparency = 1
-featuresContent.ScrollBarThickness = 4
-featuresContent.CanvasSize = UDim2.new(0, 0, 0, 200)
-featuresContent.Visible = false
-featuresContent.Parent = mainFrame
-contents["FEATURES"] = featuresContent
-
--- SETTINGS TAB (заглушка)
-local settingsTabBtn = Instance.new("TextButton")
-settingsTabBtn.Size = UDim2.new(0.25, 0, 1, 0)
-settingsTabBtn.Position = UDim2.new(0.75, 0, 0, 0)
-settingsTabBtn.BackgroundTransparency = 1
-settingsTabBtn.Text = "SETTINGS"
-settingsTabBtn.TextColor3 = Color3.fromRGB(160, 160, 160)
-settingsTabBtn.TextSize = 14
-settingsTabBtn.Font = Enum.Font.GothamSemibold
-settingsTabBtn.Parent = tabBar
-buttons["SETTINGS"] = settingsTabBtn
-
-local settingsContent = Instance.new("ScrollingFrame")
-settingsContent.Size = UDim2.new(1, 0, 1, -90)
-settingsContent.Position = UDim2.new(0, 0, 0, 90)
-settingsContent.BackgroundTransparency = 1
-settingsContent.ScrollBarThickness = 4
-settingsContent.CanvasSize = UDim2.new(0, 0, 0, 200)
-settingsContent.Visible = false
-settingsContent.Parent = mainFrame
-contents["SETTINGS"] = settingsContent
-
--- Переключение вкладок
-for name, btn in pairs(buttons) do
-    btn.MouseButton1Click:Connect(function()
-        switchTab(name)
-    end)
+for name, btn in pairs(tabs) do
+    btn.MouseButton1Click:Connect(function() switchTab(name) end)
 end
 
--- === НАПОЛНЕНИЕ SERVER TAB ===
-local function createLabel(parent, text, y)
+-- ============ ХЕЛПЕРЫ UI ============
+local function makeLabel(parent, text, y, color)
     local l = Instance.new("TextLabel")
     l.Size = UDim2.new(1, -20, 0, 32)
     l.Position = UDim2.new(0, 10, 0, y)
-    l.BackgroundColor3 = Color3.fromRGB(40, 40, 50)
-    l.BackgroundTransparency = 0.3
-    l.Text = text
-    l.TextColor3 = Color3.fromRGB(220, 220, 220)
-    l.TextSize = 14
+    l.BackgroundColor3 = Color3.fromRGB(32, 38, 48)
+    l.BorderSizePixel = 0
+    l.Text = "  " .. text
+    l.TextColor3 = color or Color3.fromRGB(210, 210, 210)
+    l.TextSize = 13
     l.Font = Enum.Font.Gotham
     l.TextXAlignment = Enum.TextXAlignment.Left
     l.Parent = parent
-    local c = Instance.new("UICorner")
-    c.CornerRadius = UDim.new(0, 6)
-    c.Parent = l
+    local c = Instance.new("UICorner"); c.CornerRadius = UDim.new(0, 6); c.Parent = l
     return l
 end
 
-local function createButton(parent, text, y, callback)
-    local btn = Instance.new("TextButton")
-    btn.Size = UDim2.new(1, -20, 0, 40)
-    btn.Position = UDim2.new(0, 10, 0, y)
-    btn.BackgroundColor3 = Color3.fromRGB(70, 70, 90)
-    btn.Text = text
-    btn.TextColor3 = Color3.fromRGB(255, 255, 255)
-    btn.TextSize = 15
-    btn.Font = Enum.Font.GothamSemibold
-    btn.Parent = parent
-    local c = Instance.new("UICorner")
-    c.CornerRadius = UDim.new(0, 8)
-    c.Parent = btn
-    btn.MouseButton1Click:Connect(callback)
-    return btn
-end
+-- Кнопка с hover-эффектом и анимацией
+local function makeButton(parent, text, y, callback)
+    local b = Instance.new("TextButton")
+    b.Size = UDim2.new(1, -20, 0, 40)
+    b.Position = UDim2.new(0, 10, 0, y)
+    b.BackgroundColor3 = Color3.fromRGB(45, 55, 70)
+    b.BorderSizePixel = 0
+    b.Text = text
+    b.TextColor3 = Color3.fromRGB(255, 255, 255)
+    b.TextSize = 14
+    b.Font = Enum.Font.GothamSemibold
+    b.AutoButtonColor = false
+    b.Parent = parent
+    local c = Instance.new("UICorner"); c.CornerRadius = UDim.new(0, 8); c.Parent = b
 
-local yOff = 10
-local jobIdLabel = createLabel(serverContent, "Job ID: Loading...", yOff); yOff = yOff + 37
-local playersLabel = createLabel(serverContent, "Players: 0 / 0", yOff); yOff = yOff + 37
-local pingLabel = createLabel(serverContent, "Ping: 0 ms", yOff); yOff = yOff + 45
-createButton(serverContent, "📋 Copy Job ID", yOff, function()
-    if setclipboard then setclipboard(game.JobId or "No JobId"); notify("Copied", "Job ID copied!", 2)
-    else notify("Error", "Copy not supported", 2) end
-end)
-yOff = yOff + 50
-local statusLabel = createLabel(serverContent, "Status: ONLINE", yOff)
-statusLabel.TextColor3 = Color3.fromRGB(100, 200, 100)
+    local baseColor = Color3.fromRGB(45, 55, 70)
+    local hoverColor = Color3.fromRGB(65, 80, 105)
 
--- === НАПОЛНЕНИЕ PLAYERS TAB ===
-local dropdownY = 10
-local playersDropdown = nil
-local spectateToggle = nil
-local infoTextField = nil
-
--- Кнопка обновления
-createButton(playersContent, "🔄 Refresh Players", dropdownY, function()
-    updatePlayersList()
-end)
-dropdownY = dropdownY + 50
-
--- Выпадающий список (кастомный)
-local dropdownFrame = Instance.new("Frame")
-dropdownFrame.Size = UDim2.new(1, -20, 0, 40)
-dropdownFrame.Position = UDim2.new(0, 10, 0, dropdownY)
-dropdownFrame.BackgroundColor3 = Color3.fromRGB(45, 45, 55)
-dropdownFrame.Parent = playersContent
-local dropdownCorner = Instance.new("UICorner")
-dropdownCorner.CornerRadius = UDim.new(0, 8)
-dropdownCorner.Parent = dropdownFrame
-
-local selectedLabel = Instance.new("TextLabel")
-selectedLabel.Size = UDim2.new(1, -30, 1, 0)
-selectedLabel.BackgroundTransparency = 1
-selectedLabel.Text = "Select player"
-selectedLabel.TextColor3 = Color3.fromRGB(255, 255, 255)
-selectedLabel.TextSize = 14
-selectedLabel.Font = Enum.Font.Gotham
-selectedLabel.TextXAlignment = Enum.TextXAlignment.Left
-selectedLabel.Parent = dropdownFrame
-
-local arrow = Instance.new("TextLabel")
-arrow.Size = UDim2.new(0, 30, 1, 0)
-arrow.Position = UDim2.new(1, -30, 0, 0)
-arrow.BackgroundTransparency = 1
-arrow.Text = "▼"
-arrow.TextColor3 = Color3.fromRGB(200, 200, 200)
-arrow.TextSize = 14
-arrow.Parent = dropdownFrame
-
-local dropdownList = Instance.new("Frame")
-dropdownList.Size = UDim2.new(1, 0, 0, 0)
-dropdownList.Position = UDim2.new(0, 0, 1, 0)
-dropdownList.BackgroundColor3 = Color3.fromRGB(35, 35, 45)
-dropdownList.Visible = false
-dropdownList.ClipsDescendants = true
-dropdownList.Parent = dropdownFrame
-local listCorner = Instance.new("UICorner")
-listCorner.CornerRadius = UDim.new(0, 8)
-listCorner.Parent = dropdownList
-local listLayout = Instance.new("UIListLayout")
-listLayout.Padding = UDim.new(0, 2)
-listLayout.Parent = dropdownList
-
-local function updateDropdownItems(items)
-    for _, child in ipairs(dropdownList:GetChildren()) do if child:IsA("TextButton") then child:Destroy() end end
-    for i, item in ipairs(items) do
-        local opt = Instance.new("TextButton")
-        opt.Size = UDim2.new(1, 0, 0, 35)
-        opt.BackgroundColor3 = Color3.fromRGB(45, 45, 55)
-        opt.Text = item
-        opt.TextColor3 = Color3.fromRGB(255, 255, 255)
-        opt.TextSize = 13
-        opt.Font = Enum.Font.Gotham
-        opt.Parent = dropdownList
-        opt.MouseButton1Click:Connect(function()
-            selectedLabel.Text = item
-            dropdownList.Visible = false
-            dropdownFrame.Size = UDim2.new(1, -20, 0, 40)
-            -- Вызов callback при выборе
-            if playersDropdownCallback then playersDropdownCallback(item) end
+    b.MouseEnter:Connect(function()
+        TweenService:Create(b, TweenInfo.new(0.15), {BackgroundColor3 = hoverColor}):Play()
+    end)
+    b.MouseLeave:Connect(function()
+        TweenService:Create(b, TweenInfo.new(0.15), {BackgroundColor3 = baseColor}):Play()
+    end)
+    b.MouseButton1Click:Connect(function()
+        -- Вспышка
+        b.BackgroundColor3 = Color3.fromRGB(90, 140, 200)
+        task.delay(0.1, function()
+            TweenService:Create(b, TweenInfo.new(0.2), {BackgroundColor3 = baseColor}):Play()
         end)
-    end
-    dropdownList.CanvasSize = UDim2.new(0, 0, 0, #items * 37)
+        pcall(callback)
+    end)
+    return b
 end
 
-dropdownFrame.MouseButton1Click:Connect(function()
-    if dropdownList.Visible then
-        dropdownList.Visible = false
-        dropdownFrame.Size = UDim2.new(1, -20, 0, 40)
-    else
-        dropdownList.Visible = true
-        dropdownFrame.Size = UDim2.new(1, -20, 0, 40 + math.min(#playersNames * 37, 180))
+-- Кнопка-toggle с индикацией
+local function makeToggle(parent, text, y, initial, callback)
+    local b = Instance.new("TextButton")
+    b.Size = UDim2.new(1, -20, 0, 40)
+    b.Position = UDim2.new(0, 10, 0, y)
+    b.BackgroundColor3 = initial and Color3.fromRGB(50, 120, 70) or Color3.fromRGB(45, 55, 70)
+    b.BorderSizePixel = 0
+    b.Text = text .. (initial and "  [ON]" or "  [OFF]")
+    b.TextColor3 = Color3.fromRGB(255, 255, 255)
+    b.TextSize = 14
+    b.Font = Enum.Font.GothamSemibold
+    b.AutoButtonColor = false
+    b.Parent = parent
+    local c = Instance.new("UICorner"); c.CornerRadius = UDim.new(0, 8); c.Parent = b
+
+    local state = initial
+    local baseText = text
+
+    local function update()
+        b.Text = baseText .. (state and "  [ON]" or "  [OFF]")
+        TweenService:Create(b, TweenInfo.new(0.2), {
+            BackgroundColor3 = state and Color3.fromRGB(50, 120, 70) or Color3.fromRGB(45, 55, 70)
+        }):Play()
     end
+
+    b.MouseButton1Click:Connect(function()
+        state = not state
+        update()
+        pcall(callback, state)
+    end)
+
+    return {
+        btn = b,
+        set = function(v)
+            state = v
+            update()
+        end,
+        get = function() return state end,
+    }
+end
+
+-- ============ SERVER TAB ============
+local serverContent = tabContents["SERVER"]
+local sY = 10
+
+local statusLabel = makeLabel(serverContent, "Status: ONLINE", sY, Color3.fromRGB(100, 220, 120))
+sY = sY + 37
+local jobIdLabel = makeLabel(serverContent, "Job ID: Loading...", sY)
+sY = sY + 37
+local playersLabel = makeLabel(serverContent, "Players: 0 / 0", sY)
+sY = sY + 37
+local pingLabel = makeLabel(serverContent, "Ping: 0 ms", sY)
+sY = sY + 50
+
+makeButton(serverContent, "📋 Copy Job ID", sY, function()
+    copyText(game.JobId ~= "" and game.JobId or "Studio/Offline")
+end)
+sY = sY + 50
+
+makeButton(serverContent, "🔄 Rejoin Server", sY, function()
+    notify("Rejoin", "Rejoining...")
+    task.wait(0.5)
+    TeleportService:TeleportToPlaceInstance(game.PlaceId, game.JobId, LocalPlayer)
+end)
+sY = sY + 50
+
+makeButton(serverContent, "🎲 Server Hop (Random)", sY, function()
+    notify("ServerHop", "Looking for server...")
+    task.spawn(function()
+        local ok, result = pcall(function()
+            return HttpService:JSONDecode(game:HttpGet(
+                "https://games.roblox.com/v1/games/" .. game.PlaceId ..
+                "/servers/Public?sortOrder=Asc&limit=100"
+            ))
+        end)
+        if not ok or not result or not result.data then
+            notify("ServerHop", "Failed to fetch servers")
+            return
+        end
+        for _, srv in ipairs(result.data) do
+            if srv.playing < srv.maxPlayers and srv.id ~= game.JobId then
+                TeleportService:TeleportToPlaceInstance(game.PlaceId, srv.id, LocalPlayer)
+                return
+            end
+        end
+        notify("ServerHop", "No available servers")
+    end)
 end)
 
-local playersNames = {}
-local playersDropdownCallback = nil
+-- ============ PLAYERS TAB ============
+local playersContent = tabContents["PLAYERS"]
+local pY = 10
 
-function setPlayersDropdown(items, callback)
-    playersNames = items
-    playersDropdownCallback = callback
-    updateDropdownItems(items)
+-- Поиск
+local searchBox = Instance.new("TextBox")
+searchBox.Size = UDim2.new(1, -20, 0, 36)
+searchBox.Position = UDim2.new(0, 10, 0, pY)
+searchBox.BackgroundColor3 = Color3.fromRGB(32, 38, 48)
+searchBox.BorderSizePixel = 0
+searchBox.Text = ""
+searchBox.PlaceholderText = "🔎 Search player..."
+searchBox.PlaceholderColor3 = Color3.fromRGB(120, 120, 120)
+searchBox.TextColor3 = Color3.fromRGB(255, 255, 255)
+searchBox.TextSize = 13
+searchBox.Font = Enum.Font.Gotham
+searchBox.TextXAlignment = Enum.TextXAlignment.Left
+searchBox.ClearTextOnFocus = false
+searchBox.Parent = playersContent
+local searchCorner = Instance.new("UICorner"); searchCorner.CornerRadius = UDim.new(0, 8); searchCorner.Parent = searchBox
+pY = pY + 46
+
+-- Список
+local listFrame = Instance.new("ScrollingFrame")
+listFrame.Size = UDim2.new(1, -20, 0, 180)
+listFrame.Position = UDim2.new(0, 10, 0, pY)
+listFrame.BackgroundColor3 = Color3.fromRGB(28, 33, 42)
+listFrame.BorderSizePixel = 0
+listFrame.ScrollBarThickness = 4
+listFrame.ScrollBarImageColor3 = Color3.fromRGB(60, 90, 130)
+listFrame.CanvasSize = UDim2.new(0, 0, 0, 0)
+listFrame.Parent = playersContent
+local listCorner = Instance.new("UICorner"); listCorner.CornerRadius = UDim.new(0, 8); listCorner.Parent = listFrame
+local listLayout = Instance.new("UIListLayout")
+listLayout.Padding = UDim.new(0, 3)
+listLayout.SortOrder = Enum.SortOrder.LayoutOrder
+listLayout.Parent = listFrame
+listLayout:GetPropertyChangedSignal("AbsoluteContentSize"):Connect(function()
+    listFrame.CanvasSize = UDim2.new(0, 0, 0, listLayout.AbsoluteContentSize.Y + 6)
+end)
+pY = pY + 190
+
+-- Информация об игроке
+local infoFrame = Instance.new("Frame")
+infoFrame.Size = UDim2.new(1, -20, 0, 95)
+infoFrame.Position = UDim2.new(0, 10, 0, pY)
+infoFrame.BackgroundColor3 = Color3.fromRGB(28, 33, 42)
+infoFrame.BorderSizePixel = 0
+infoFrame.Parent = playersContent
+local infoCorner = Instance.new("UICorner"); infoCorner.CornerRadius = UDim.new(0, 8); infoCorner.Parent = infoFrame
+
+local infoLabel = Instance.new("TextLabel")
+infoLabel.Size = UDim2.new(1, -12, 1, -12)
+infoLabel.Position = UDim2.new(0, 6, 0, 6)
+infoLabel.BackgroundTransparency = 1
+infoLabel.Text = "Выбери игрока из списка"
+infoLabel.TextColor3 = Color3.fromRGB(190, 190, 190)
+infoLabel.TextSize = 12
+infoLabel.Font = Enum.Font.Gotham
+infoLabel.TextWrapped = true
+infoLabel.TextXAlignment = Enum.TextXAlignment.Left
+infoLabel.TextYAlignment = Enum.TextYAlignment.Top
+infoLabel.Parent = infoFrame
+pY = pY + 105
+
+-- Кнопки действий
+local selectedPlayerName = nil
+local specState = false
+local specConn = nil
+local specTarget = nil
+local specTargetCharConn = nil
+local origCamType, origCamCFrame
+
+local function stopSpec()
+    if specConn then specConn:Disconnect() specConn = nil end
+    if specTargetCharConn then specTargetCharConn:Disconnect() specTargetCharConn = nil end
+    if specState then
+        specState = false
+        Camera.CameraType = origCamType or Enum.CameraType.Custom
+        if origCamCFrame then Camera.CFrame = origCamCFrame end
+        specTarget = nil
+        if specToggle then specToggle.set(false) end
+    end
 end
 
-dropdownY = dropdownY + 50
+local function startSpec(target)
+    if specState then stopSpec() end
+    if not target or target == LocalPlayer then
+        notify("Spectate", "Invalid target"); return
+    end
+    if not getRoot(target) then
+        notify("Spectate", "Character not loaded"); return
+    end
+    origCamType = Camera.CameraType
+    origCamCFrame = Camera.CFrame
+    Camera.CameraType = Enum.CameraType.Scriptable
+    specTarget = target
+    specState = true
 
--- Информационное поле
-local infoFrame = Instance.new("Frame")
-infoFrame.Size = UDim2.new(1, -20, 0, 100)
-infoFrame.Position = UDim2.new(0, 10, 0, dropdownY)
-infoFrame.BackgroundColor3 = Color3.fromRGB(35, 35, 45)
-infoFrame.BackgroundTransparency = 0.5
-infoFrame.Parent = playersContent
-local infoCorner = Instance.new("UICorner")
-infoCorner.CornerRadius = UDim.new(0, 8)
-infoCorner.Parent = infoFrame
+    specConn = RunService.RenderStepped:Connect(function()
+        if not specState or not specTarget then stopSpec() return end
+        local root = getRoot(specTarget)
+        if not root then return end -- ждём респавна, не крашимся
+        local targetCF = root.CFrame + root.CFrame.UpVector * CONFIG.SPEC_OFFSET
+        Camera.CFrame = Camera.CFrame:Lerp(targetCF, CONFIG.SPEC_LERP)
+    end)
 
-infoTextField = Instance.new("TextLabel")
-infoTextField.Size = UDim2.new(1, -10, 1, -10)
-infoTextField.Position = UDim2.new(0, 5, 0, 5)
-infoTextField.BackgroundTransparency = 1
-infoTextField.Text = "Select a player"
-infoTextField.TextColor3 = Color3.fromRGB(200, 200, 200)
-infoTextField.TextSize = 13
-infoTextField.Font = Enum.Font.Gotham
-infoTextField.TextWrapped = true
-infoTextField.Parent = infoFrame
-dropdownY = dropdownY + 110
+    -- Переподключение при респавне цели
+    specTargetCharConn = specTarget.CharacterAdded:Connect(function(char)
+        char:WaitForChild("HumanoidRootPart", 5)
+    end)
 
--- Spectate Toggle
-local toggleFrame = Instance.new("Frame")
-toggleFrame.Size = UDim2.new(1, -20, 0, 40)
-toggleFrame.Position = UDim2.new(0, 10, 0, dropdownY)
-toggleFrame.BackgroundColor3 = Color3.fromRGB(45, 45, 55)
-toggleFrame.Parent = playersContent
-local toggleCorner = Instance.new("UICorner")
-toggleCorner.CornerRadius = UDim.new(0, 8)
-toggleCorner.Parent = toggleFrame
+    notify("Spectate", "Spectating " .. target.Name)
+end
 
-local toggleLabel = Instance.new("TextLabel")
-toggleLabel.Size = UDim2.new(1, -60, 1, 0)
-toggleLabel.BackgroundTransparency = 1
-toggleLabel.Text = "🔍 Spectate Mode"
-toggleLabel.TextColor3 = Color3.fromRGB(255, 255, 255)
-toggleLabel.TextSize = 14
-toggleLabel.Font = Enum.Font.Gotham
-toggleLabel.TextXAlignment = Enum.TextXAlignment.Left
-toggleLabel.Parent = toggleFrame
-
-local toggleBtn = Instance.new("TextButton")
-toggleBtn.Size = UDim2.new(0, 50, 0, 30)
-toggleBtn.Position = UDim2.new(1, -55, 0.5, -15)
-toggleBtn.BackgroundColor3 = Color3.fromRGB(100, 100, 120)
-toggleBtn.Text = "OFF"
-toggleBtn.TextColor3 = Color3.fromRGB(255, 255, 255)
-toggleBtn.TextSize = 12
-toggleBtn.Font = Enum.Font.GothamBold
-toggleBtn.Parent = toggleFrame
-local btnCorner = Instance.new("UICorner")
-btnCorner.CornerRadius = UDim.new(0, 15)
-btnCorner.Parent = toggleBtn
-
-local spectateState = false
-toggleBtn.MouseButton1Click:Connect(function()
-    spectateState = not spectateState
-    if spectateState then
-        toggleBtn.BackgroundColor3 = Color3.fromRGB(76, 175, 80)
-        toggleBtn.Text = "ON"
-        local selected = selectedLabel.Text
-        local target = Players:FindFirstChild(selected)
-        if target and target ~= LocalPlayer then
-            startSpectate(target)
+-- Spectate toggle
+local specToggle = makeToggle(playersContent, "🔍 Spectate", pY, false, function(state)
+    if state then
+        if selectedPlayerName then
+            local t = Players:FindFirstChild(selectedPlayerName)
+            if t then startSpec(t) else specToggle.set(false) end
         else
-            spectateState = false
-            toggleBtn.BackgroundColor3 = Color3.fromRGB(100, 100, 120)
-            toggleBtn.Text = "OFF"
-            notify("Error", "Invalid player selected", 2)
+            notify("Spectate", "Select a player first")
+            specToggle.set(false)
         end
     else
-        stopSpectate()
-        toggleBtn.BackgroundColor3 = Color3.fromRGB(100, 100, 120)
-        toggleBtn.Text = "OFF"
+        stopSpec()
+    end
+end)
+pY = pY + 50
+
+makeButton(playersContent, "🌀 Teleport to Player", pY, function()
+    if not selectedPlayerName then notify("TP", "Select a player") return end
+    local t = Players:FindFirstChild(selectedPlayerName)
+    local myRoot = getRoot(LocalPlayer)
+    local tgtRoot = getRoot(t)
+    if myRoot and tgtRoot then
+        myRoot.CFrame = tgtRoot.CFrame + Vector3.new(0, 3, 0)
+        notify("TP", "Teleported to " .. t.Name)
+    else
+        notify("TP", "Character not loaded")
+    end
+end)
+pY = pY + 50
+
+makeButton(playersContent, "🔄 Refresh List", pY, function()
+    refreshPlayerListUI()
+end)
+
+-- Функция обновления списка игроков
+function refreshPlayerListUI()
+    for _, child in ipairs(listFrame:GetChildren()) do
+        if child:IsA("TextButton") then child:Destroy() end
+    end
+
+    local query = searchBox.Text:lower()
+    for _, plr in ipairs(Players:GetPlayers()) do
+        if query == "" or plr.Name:lower():find(query, 1, true) then
+            local opt = Instance.new("TextButton")
+            opt.Size = UDim2.new(1, -6, 0, 34)
+            opt.BackgroundColor3 = Color3.fromRGB(42, 50, 62)
+            opt.BorderSizePixel = 0
+            opt.Text = "  " .. plr.Name
+            opt.TextColor3 = Color3.fromRGB(255, 255, 255)
+            opt.TextSize = 13
+            opt.Font = Enum.Font.Gotham
+            opt.TextXAlignment = Enum.TextXAlignment.Left
+            opt.AutoButtonColor = false
+            opt.Parent = listFrame
+            local oc = Instance.new("UICorner"); oc.CornerRadius = UDim.new(0, 6); oc.Parent = opt
+
+            opt.MouseEnter:Connect(function()
+                TweenService:Create(opt, TweenInfo.new(0.15), {BackgroundColor3 = Color3.fromRGB(55, 70, 90)}):Play()
+            end)
+            opt.MouseLeave:Connect(function()
+                if selectedPlayerName ~= plr.Name then
+                    TweenService:Create(opt, TweenInfo.new(0.15), {BackgroundColor3 = Color3.fromRGB(42, 50, 62)}):Play()
+                end
+            end)
+            opt.MouseButton1Click:Connect(function()
+                selectedPlayerName = plr.Name
+                for _, c in ipairs(listFrame:GetChildren()) do
+                    if c:IsA("TextButton") then
+                        c.BackgroundColor3 = Color3.fromRGB(42, 50, 62)
+                    end
+                end
+                opt.BackgroundColor3 = Color3.fromRGB(70, 120, 190)
+                local info = string.format(
+                    "Name: %s\nDisplay: %s\nAccount Age: %d days\nTeam: %s",
+                    plr.Name, plr.DisplayName, plr.AccountAge,
+                    plr.Team and plr.Team.Name or "None"
+                )
+                infoLabel.Text = info
+                print(info)
+                notify("Player", "Selected: " .. plr.Name)
+            end)
+        end
+    end
+end
+
+searchBox:GetPropertyChangedSignal("Text"):Connect(function()
+    refreshPlayerListUI()
+end)
+
+-- ============ FEATURES TAB ============
+local featuresContent = tabContents["FEATURES"]
+local fY = 10
+
+-- Godmode
+local godToggle = makeToggle(featuresContent, "🛡️ Godmode (MaxHealth)", fY, false, function(state)
+    local hum = getHumanoid(LocalPlayer)
+    if not hum then notify("Godmode", "No Humanoid") return end
+    if state then
+        hum.MaxHealth = math.huge
+        hum.Health = math.huge
+        notify("Godmode", "ON")
+    else
+        hum.MaxHealth = 100
+        hum.Health = math.min(hum.Health, 100)
+        notify("Godmode", "OFF")
+    end
+end)
+fY = fY + 50
+
+-- Fly
+local flyState = false
+local flyConn = nil
+local flyBV = nil
+
+local function stopFly()
+    if flyConn then flyConn:Disconnect() flyConn = nil end
+    if flyBV then flyBV:Destroy() flyBV = nil end
+    flyState = false
+    local char = LocalPlayer.Character
+    if char then
+        local hum = char:FindFirstChildOfClass("Humanoid")
+        if hum then hum.PlatformStand = false end
+    end
+    if flyToggle then flyToggle.set(false) end
+end
+
+local function startFly()
+    if flyState then stopFly() return end
+    local char = LocalPlayer.Character
+    if not char then return end
+    local hrp = char:FindFirstChild("HumanoidRootPart")
+    local hum = char:FindFirstChildOfClass("Humanoid")
+    if not hrp or not hum then return end
+
+    hum.PlatformStand = true
+    flyBV = Instance.new("BodyVelocity")
+    flyBV.MaxForce = Vector3.new(1e6, 1e6, 1e6)
+    flyBV.Velocity = Vector3.zero
+    flyBV.Parent = hrp
+    flyState = true
+
+    flyConn = RunService.RenderStepped:Connect(function()
+        if not flyState then return end
+        local c = LocalPlayer.Character
+        if not c then stopFly() return end
+        local r = c:FindFirstChild("HumanoidRootPart")
+        if not r or not flyBV then stopFly() return end
+
+        local move = Vector3.zero
+        local cam = workspace.CurrentCamera
+        if UserInputService:IsKeyDown(Enum.KeyCode.W) then move += cam.CFrame.LookVector end
+        if UserInputService:IsKeyDown(Enum.KeyCode.S) then move -= cam.CFrame.LookVector end
+        if UserInputService:IsKeyDown(Enum.KeyCode.A) then move -= cam.CFrame.RightVector end
+        if UserInputService:IsKeyDown(Enum.KeyCode.D) then move += cam.CFrame.RightVector end
+        if UserInputService:IsKeyDown(Enum.KeyCode.Space) then move += Vector3.new(0, 1, 0) end
+        if UserInputService:IsKeyDown(Enum.KeyCode.LeftControl) then move -= Vector3.new(0, 1, 0) end
+        flyBV.Velocity = move * CONFIG.FLY_SPEED
+    end)
+    notify("Fly", "ON — WASD + Space/Ctrl")
+end
+
+local flyToggle = makeToggle(featuresContent, "🕊️ Fly (WASD)", fY, false, function(state)
+    if state then startFly() else stopFly() end
+end)
+fY = fY + 50
+
+-- Speed
+local speedValue = CONFIG.DEFAULT_SPEED
+local speedSlider = Instance.new("TextButton")
+speedSlider.Size = UDim2.new(1, -20, 0, 40)
+speedSlider.Position = UDim2.new(0, 10, 0, fY)
+speedSlider.BackgroundColor3 = Color3.fromRGB(45, 55, 70)
+speedSlider.BorderSizePixel = 0
+speedSlider.Text = "🏃 Speed: " .. speedValue
+speedSlider.TextColor3 = Color3.fromRGB(255, 255, 255)
+speedSlider.TextSize = 14
+speedSlider.Font = Enum.Font.GothamSemibold
+speedSlider.Parent = featuresContent
+local spCorner = Instance.new("UICorner"); spCorner.CornerRadius = UDim.new(0, 8); spCorner.Parent = speedSlider
+
+speedSlider.MouseButton1Click:Connect(function()
+    local hum = getHumanoid(LocalPlayer)
+    if not hum then return end
+    speedValue = speedValue >= 200 and 16 or speedValue + 16
+    hum.WalkSpeed = speedValue
+    speedSlider.Text = "🏃 Speed: " .. speedValue
+    notify("Speed", tostring(speedValue))
+end)
+fY = fY + 50
+
+-- Jump
+local jumpValue = CONFIG.DEFAULT_JUMP
+local jumpBtn = Instance.new("TextButton")
+jumpBtn.Size = UDim2.new(1, -20, 0, 40)
+jumpBtn.Position = UDim2.new(0, 10, 0, fY)
+jumpBtn.BackgroundColor3 = Color3.fromRGB(45, 55, 70)
+jumpBtn.BorderSizePixel = 0
+jumpBtn.Text = "🦘 Jump: " .. jumpValue
+jumpBtn.TextColor3 = Color3.fromRGB(255, 255, 255)
+jumpBtn.TextSize = 14
+jumpBtn.Font = Enum.Font.GothamSemibold
+jumpBtn.Parent = featuresContent
+local jpCorner = Instance.new("UICorner"); jpCorner.CornerRadius = UDim.new(0, 8); jpCorner.Parent = jumpBtn
+
+jumpBtn.MouseButton1Click:Connect(function()
+    local hum = getHumanoid(LocalPlayer)
+    if not hum then return end
+    jumpValue = jumpValue >= 200 and 50 or jumpValue + 25
+    hum.JumpPower = jumpValue
+    hum.UseJumpPower = true
+    jumpBtn.Text = "🦘 Jump: " .. jumpValue
+    notify("Jump", tostring(jumpValue))
+end)
+fY = fY + 50
+
+-- Slap
+makeButton(featuresContent, "👊 Slap Selected", fY, function()
+    if not selectedPlayerName then notify("Slap", "Select a player") return end
+    local t = Players:FindFirstChild(selectedPlayerName)
+    local root = getRoot(t)
+    if root then
+        root.AssemblyLinearVelocity = Vector3.new(0, 100, 0) + (root.CFrame.LookVector * 50)
+        notify("Slap", "Slapped " .. t.Name)
+    end
+end)
+fY = fY + 50
+
+-- Heal Self
+makeButton(featuresContent, "💚 Heal Self", fY, function()
+    local hum = getHumanoid(LocalPlayer)
+    if hum then
+        hum.Health = hum.MaxHealth
+        notify("Heal", "You healed yourself")
+    end
+end)
+fY = fY + 50
+
+-- Respawn
+makeButton(featuresContent, "🔄 Respawn", fY, function()
+    local hum = getHumanoid(LocalPlayer)
+    if hum then hum.Health = 0 end
+end)
+fY = fY + 50
+
+-- FPS Unlocker
+local fpsToggle = makeToggle(featuresContent, "⚡ FPS Unlocker", fY, false, function(state)
+    if setfpscap then
+        pcall(setfpscap, state and 999 or 60)
+        notify("FPS", state and "Unlocked" or "60")
+    else
+        notify("FPS", "Not supported")
+    end
+end)
+fY = fY + 50
+
+-- Anti-AFK
+local afkConn = nil
+local afkToggle = makeToggle(featuresContent, "🚫 Anti-AFK", fY, false, function(state)
+    if state then
+        afkConn = LocalPlayer.Idled:Connect(function()
+            local vu = game:GetService("VirtualUser")
+            vu:CaptureController()
+            vu:ClickButton2(Vector2.new())
+        end)
+        track(afkConn)
+        notify("Anti-AFK", "ON")
+    else
+        if afkConn then afkConn:Disconnect() afkConn = nil end
+        notify("Anti-AFK", "OFF")
+    end
+end)
+fY = fY + 50
+
+-- Chat Spy
+local chatSpyToggle = makeToggle(featuresContent, "💬 Chat Spy (console)", fY, false, function(state)
+    if state then
+        local conn = Players.PlayerAdded:Connect(function(plr)
+            local c = plr.Chatted:Connect(function(msg)
+                print("[CHAT] " .. plr.Name .. ": " .. msg)
+            end)
+            track(c)
+        end)
+        track(conn)
+        for _, plr in ipairs(Players:GetPlayers()) do
+            if plr ~= LocalPlayer then
+                local c = plr.Chatted:Connect(function(msg)
+                    print("[CHAT] " .. plr.Name .. ": " .. msg)
+                end)
+                track(c)
+            end
+        end
+        notify("ChatSpy", "Logging to console")
     end
 end)
 
-function setSpectateToggleOff()
-    spectateState = false
-    toggleBtn.BackgroundColor3 = Color3.fromRGB(100, 100, 120)
-    toggleBtn.Text = "OFF"
-end
+-- ============ SETTINGS TAB ============
+local settingsContent = tabContents["SETTINGS"]
+local setY = 10
 
--- === ФУНКЦИИ ОБНОВЛЕНИЯ ДАННЫХ ===
+makeButton(settingsContent, "👁️ Hide GUI", setY, function()
+    mainFrame.Visible = false
+    notify("GUI", "Hidden. Press K")
+end)
+setY = setY + 50
+
+makeButton(settingsContent, "🗑️ Unload Script", setY, function()
+    disconnectAll()
+    if specState then stopSpec() end
+    if flyState then stopFly() end
+    screenGui:Destroy()
+    _G.NurHubLoaded = false
+    notify("Hub", "Unloaded")
+end)
+setY = setY + 50
+
+makeLabel(settingsContent, "Made by Nurali_Viper 🐍", setY, Color3.fromRGB(120, 180, 255))
+
+-- ============ ЛОГИКА СВОРАЧИВАНИЯ / ЗАКРЫТИЯ ============
+minBtn.MouseButton1Click:Connect(function()
+    mainFrame.Visible = false
+    miniIcon.Visible = true
+    notify("GUI", "Minimized")
+end)
+
+miniIcon.MouseButton1Click:Connect(function()
+    mainFrame.Visible = true
+    miniIcon.Visible = false
+    updateServerInfo()
+    refreshPlayerListUI()
+end)
+
+closeBtn.MouseButton1Click:Connect(function()
+    disconnectAll()
+    if specState then stopSpec() end
+    if flyState then stopFly() end
+    screenGui:Destroy()
+    _G.NurHubLoaded = false
+    notify("Hub", "Closed")
+end)
+
+-- ============ ОБНОВЛЕНИЕ ============
 function updateServerInfo()
     pcall(function()
-        jobIdLabel.Text = "Job ID: " .. (game.JobId or "Offline")
-        playersLabel.Text = "Players: " .. #Players:GetPlayers() .. " / " .. Players.MaxPlayers
-        pingLabel.Text = "Ping: " .. math.floor(LocalPlayer:GetNetworkPing() * 1000) .. " ms"
-        statusLabel.Text = "Status: ONLINE"
-    end)
-end
-
-function updatePlayersList()
-    local names = {}
-    for _, p in ipairs(Players:GetPlayers()) do
-        table.insert(names, p.Name)
-    end
-    if #names == 0 then table.insert(names, "No players") end
-    setPlayersDropdown(names, function(selected)
-        local player = Players:FindFirstChild(selected)
-        if player then
-            local info = string.format("Name: %s\nDisplay: %s\nAccount Age: %d days\nTeam: %s",
-                player.Name, player.DisplayName or player.Name, player.AccountAge or 0,
-                (player.Team and player.Team.Name) or "No team")
-            infoTextField.Text = info
-            print(info)
-            notify("Player Info", player.Name .. ": " .. (player.AccountAge or 0) .. " days", 3)
+        local jid = game.JobId
+        if jid and #jid > 0 then
+            jobIdLabel.Text = "  Job ID: " .. jid:sub(1, 22) .. "..."
+        else
+            jobIdLabel.Text = "  Job ID: Offline/Studio"
         end
+        playersLabel.Text = "  Players: " .. #Players:GetPlayers() .. " / " .. Players.MaxPlayers
+        pingLabel.Text = "  Ping: " .. getPing() .. " ms"
     end)
 end
 
--- === СОБЫТИЯ И ЦИКЛЫ ===
+-- ============ СОБЫТИЯ ============
+track(Players.PlayerAdded:Connect(refreshPlayerListUI))
+track(Players.PlayerRemoving:Connect(function(plr)
+    refreshPlayerListUI()
+    if specTarget == plr then stopSpec() end
+    if selectedPlayerName == plr.Name then
+        selectedPlayerName = nil
+        infoLabel.Text = "Выбери игрока из списка"
+    end
+end))
+
+-- Защита от респавна LocalPlayer (обновляем ссылки)
+track(LocalPlayer.CharacterAdded:Connect(function()
+    task.wait(0.5)
+    -- Проверяем, активен ли fly — если да, выключим (новый персонаж)
+    if flyState then stopFly() end
+    -- Godmode: если был включён, применим к новому персонажу
+    if godToggle and godToggle.get() then
+        local hum = getHumanoid(LocalPlayer)
+        if hum then
+            hum.MaxHealth = math.huge
+            hum.Health = math.huge
+        end
+    end
+end))
+
+-- Автообновление сервера
 task.spawn(function()
-    while task.wait(2) do
-        if mainFrame and mainFrame.Visible then
+    while _G.NurHubLoaded do
+        task.wait(2)
+        if mainFrame.Visible or miniIcon.Visible then
             updateServerInfo()
         end
     end
 end)
 
-Players.PlayerAdded:Connect(function() updatePlayersList() end)
-Players.PlayerRemoving:Connect(function(player)
-    updatePlayersList()
-    if currentSpectateTarget == player then
-        if spectateState then setSpectateToggleOff() end
-        stopSpectate()
-    end
-end)
-
--- Запуск
-updateServerInfo()
-updatePlayersList()
-switchTab("SERVER") -- активируем первую вкладку
-notify("Ready", "Mobile Hub v7.0 loaded! Press K to toggle?", 3)
-log("Mobile Hub v7.0 ready")
-
--- Обработка кнопки K (скрыть/показать основное окно, но не иконку)
-UserInputService.InputBegan:Connect(function(input, gameProcessed)
-    if gameProcessed then return end
+-- Кнопка K
+track(UserInputService.InputBegan:Connect(function(input, gp)
+    if gp then return end
     if input.KeyCode == Enum.KeyCode.K then
-        if guiMinimized then
-            -- Если свернуто, разворачиваем
-            guiMinimized = false
-            minimizedIcon.Visible = false
+        if miniIcon.Visible then
+            miniIcon.Visible = false
             mainFrame.Visible = true
-            notify("GUI", "Window restored", 1)
         else
-            -- Если развернуто, скрываем окно, но не сворачиваем в иконку
             mainFrame.Visible = not mainFrame.Visible
-            notify("GUI", mainFrame.Visible and "Menu shown" or "Menu hidden", 1)
         end
     end
-end)
+end))
+
+-- ============ ИНИЦИАЛИЗАЦИЯ ============
+updateServerInfo()
+refreshPlayerListUI()
+switchTab("SERVER")
+
+notify("Nur Hub v9.0", "Loaded! Press K")
+log("v9.0 ready")
