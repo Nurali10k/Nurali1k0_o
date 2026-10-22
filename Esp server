@@ -1,7 +1,7 @@
 --[[
-    Nur Hub v10.0 (Ultimate Rewrite)
-    - Glassmorphism UI + Smooth Tweens
-    - True Remote Spectate (Camera only)
+    Nur Hub v10.1 (Delta Optimized + ESP)
+    - Drawing API ESP (Names, Boxes, Tracers)
+    - True Remote Spectate (Camera only, character stays)
     - Live Dashboard (FPS, Ping, Time)
     - Exploiter Profile Tab
     - Optimized Player List (No lag on search)
@@ -41,6 +41,14 @@ local function track(conn) table.insert(Connections, conn); return conn end
 local function disconnectAll()
     for _, c in ipairs(Connections) do pcall(function() c:Disconnect() end) end
     Connections = {}
+    -- Очистка ESP при выгрузке
+    for _, obj in pairs(ESP_Objects) do
+        if obj.Box then obj.Box:Remove() end
+        if obj.Name then obj.Name:Remove() end
+        if obj.Tracer then obj.Tracer:Remove() end
+    end
+    ESP_Objects = {}
+    if ESP_Connection then ESP_Connection:Disconnect(); ESP_Connection = nil end
 end
 
 local function notify(title, text)
@@ -64,7 +72,7 @@ screenGui.IgnoreGuiInset = true
 screenGui.ZIndexBehavior = Enum.ZIndexBehavior.Sibling
 screenGui.Parent = GUI_PARENT
 
--- ============ LIVE DASHBOARD (Мини-статистика) ============
+-- ============ LIVE DASHBOARD ============
 local dashboard = Instance.new("Frame")
 dashboard.Size = UDim2.new(0, 160, 0, 90)
 dashboard.Position = UDim2.new(1, -170, 0, 10)
@@ -75,8 +83,8 @@ dashboard.Active = true
 dashboard.Draggable = true
 dashboard.Parent = screenGui
 
-local dbCorner = Instance.new("UICorner"):Clone(); dbCorner.CornerRadius = UDim.new(0, 8); dbCorner.Parent = dashboard
-local dbStroke = Instance.new("UIStroke"):Clone(); dbStroke.Color = CONFIG.THEME_ACCENT; dbStroke.Thickness = 1; dbStroke.Transparency = 0.6; dbStroke.Parent = dashboard
+local dbCorner = Instance.new("UICorner"); dbCorner.CornerRadius = UDim.new(0, 8); dbCorner.Parent = dashboard
+local dbStroke = Instance.new("UIStroke"); dbStroke.Color = CONFIG.THEME_ACCENT; dbStroke.Thickness = 1; dbStroke.Transparency = 0.6; dbStroke.Parent = dashboard
 
 local dbText = Instance.new("TextLabel")
 dbText.Size = UDim2.new(1, -10, 1, -10)
@@ -90,18 +98,13 @@ dbText.TextYAlignment = Enum.TextYAlignment.Top
 dbText.TextWrapped = true
 dbText.Parent = dashboard
 
--- Обновление дашборда
 track(RunService.Heartbeat:Connect(function()
     local fps = math.floor(1 / RunService.RenderStepped:Wait())
     local ping = math.floor(Stats.Network.ServerStatsItem["Data Ping"]:GetValue())
     local realTime = os.date("%H:%M:%S")
     local gameClock = Lighting.ClockTime
     local timeOfDay = gameClock >= 6 and gameClock < 18 and "☀️ День" or "🌙 Ночь"
-    
-    dbText.Text = string.format(
-        "⚡ FPS: %d\n📶 Ping: %d ms\n🕒 PC: %s\n🎮 Game: %s",
-        fps, ping, realTime, timeOfDay
-    )
+    dbText.Text = string.format("⚡ FPS: %d\n📶 Ping: %d ms\n🕒 PC: %s\n🎮 Game: %s", fps, ping, realTime, timeOfDay)
 end))
 
 -- ============ ГЛАВНОЕ ОКНО ============
@@ -118,13 +121,11 @@ mainFrame.Parent = screenGui
 local mainCorner = Instance.new("UICorner"); mainCorner.CornerRadius = UDim.new(0, 12); mainCorner.Parent = mainFrame
 local mainStroke = Instance.new("UIStroke"); mainStroke.Color = CONFIG.THEME_ACCENT; mainStroke.Thickness = 1; mainStroke.Transparency = 0.7; mainStroke.Parent = mainFrame
 
--- Градиент для красоты
 local gradient = Instance.new("UIGradient")
 gradient.Color = ColorSequence.new{ColorSequenceKeypoint.new(0, Color3.fromRGB(20, 25, 35)), ColorSequenceKeypoint.new(1, Color3.fromRGB(10, 13, 20))}
 gradient.Rotation = 90
 gradient.Parent = mainFrame
 
--- Заголовок
 local titleBar = Instance.new("Frame")
 titleBar.Size = UDim2.new(1, 0, 0, 45)
 titleBar.BackgroundTransparency = 1
@@ -134,7 +135,7 @@ local titleText = Instance.new("TextLabel")
 titleText.Size = UDim2.new(1, -90, 1, 0)
 titleText.Position = UDim2.new(0, 15, 0, 0)
 titleText.BackgroundTransparency = 1
-titleText.Text = "🐍 NUR HUB v10.0"
+titleText.Text = "🐍 NUR HUB v10.1"
 titleText.TextColor3 = CONFIG.THEME_ACCENT
 titleText.TextSize = 18
 titleText.Font = Enum.Font.GothamBlack
@@ -303,8 +304,7 @@ local listLayout = Instance.new("UIListLayout")
 listLayout.Padding = UDim.new(0, 4)
 listLayout.Parent = listFrame
 
-local playerButtons = {} -- Кэш для оптимизации
-
+local playerButtons = {}
 local function updatePlayerList()
     local query = searchBox.Text:lower()
     for _, plr in ipairs(Players:GetPlayers()) do
@@ -324,19 +324,14 @@ local function updatePlayerList()
             btn.MouseButton1Click:Connect(function()
                 selectedPlayer = plr
                 notify("Игрок", "Выбран: " .. plr.Name)
-                -- Визуальное выделение
                 for _, b in pairs(playerButtons) do b.BackgroundColor3 = Color3.fromRGB(30, 35, 45) end
                 btn.BackgroundColor3 = CONFIG.THEME_ACCENT
             end)
             playerButtons[plr] = btn
         end
-        
-        -- ОПТИМИЗАЦИЯ: Меняем только Visible, не пересоздаем!
         local match = query == "" or plr.Name:lower():find(query, 1, true)
         playerButtons[plr].Visible = match
     end
-    
-    -- Очистка ушедших игроков
     for plr, btn in pairs(playerButtons) do
         if not Players:FindFirstChild(plr.Name) then
             btn:Destroy()
@@ -352,7 +347,7 @@ updatePlayerList()
 
 local selectedPlayer = nil
 
--- TRUE REMOTE SPECTATE (Камера следует, персонаж стоит)
+-- TRUE REMOTE SPECTATE (Камера следует, персонаж стоит на месте)
 local origCamType, origCamSubject
 makeToggle(plrContent, "👁️ Следить за игроком (Камера)", false, function(state)
     if state then
@@ -365,10 +360,8 @@ makeToggle(plrContent, "👁️ Следить за игроком (Камера
             notify("Ошибка", "Персонаж не загружен")
             return
         end
-        
         origCamType = Camera.CameraType
         origCamSubject = Camera.CameraSubject
-        
         Camera.CameraType = Enum.CameraType.Custom
         Camera.CameraSubject = char:FindFirstChild("Humanoid")
         notify("Слежка", "Камера привязана к " .. selectedPlayer.Name)
@@ -389,24 +382,145 @@ makeButton(plrContent, "🌀 Телепорт К игроку", function()
     end
 end)
 
--- ============ 3. ВКЛАДКА: ФИЧИ ============
+-- ============ 3. ВКЛАДКА: ФИЧИ (С ESP) ============
 local featContent = tabContents["ФИЧИ"]
+
+-- ESP МОДУЛЬ
+local ESP_Settings = {
+    Enabled = false,
+    ShowNames = true,
+    ShowBoxes = true,
+    ShowTracers = true,
+    MaxDistance = 1000,
+    Color = CONFIG.THEME_ACCENT
+}
+local ESP_Objects = {}
+local ESP_Connection = nil
+
+local function UpdateESP()
+    if not ESP_Settings.Enabled then
+        for _, obj in pairs(ESP_Objects) do
+            if obj.Box then obj.Box:Remove() end
+            if obj.Name then obj.Name:Remove() end
+            if obj.Tracer then obj.Tracer:Remove() end
+        end
+        ESP_Objects = {}
+        return
+    end
+
+    local localRoot = LocalPlayer.Character and LocalPlayer.Character:FindFirstChild("HumanoidRootPart")
+    for _, plr in ipairs(Players:GetPlayers()) do
+        if plr == LocalPlayer then continue end
+        local char = plr.Character
+        if not char then continue end
+        local hrp = char:FindFirstChild("HumanoidRootPart")
+        local hum = char:FindFirstChildOfClass("Humanoid")
+        
+        if not hrp or not hum or hum.Health <= 0 then
+            if ESP_Objects[plr] then
+                if ESP_Objects[plr].Box then ESP_Objects[plr].Box:Remove() end
+                if ESP_Objects[plr].Name then ESP_Objects[plr].Name:Remove() end
+                if ESP_Objects[plr].Tracer then ESP_Objects[plr].Tracer:Remove() end
+                ESP_Objects[plr] = nil
+            end
+            continue
+        end
+
+        local dist = localRoot and (hrp.Position - localRoot.Position).Magnitude or 9999
+        if dist > ESP_Settings.MaxDistance then
+            if ESP_Objects[plr] then
+                if ESP_Objects[plr].Box then ESP_Objects[plr].Box.Visible = false end
+                if ESP_Objects[plr].Name then ESP_Objects[plr].Name.Visible = false end
+                if ESP_Objects[plr].Tracer then ESP_Objects[plr].Tracer.Visible = false end
+            end
+            continue
+        end
+
+        if not ESP_Objects[plr] then ESP_Objects[plr] = {} end
+        local screenPos, onScreen = Camera:WorldToViewportPoint(hrp.Position)
+        
+        if ESP_Settings.ShowNames then
+            if not ESP_Objects[plr].Name then
+                ESP_Objects[plr].Name = Drawing.new("Text")
+                ESP_Objects[plr].Name.Size = 13
+                ESP_Objects[plr].Name.Font = 2
+                ESP_Objects[plr].Name.Center = true
+                ESP_Objects[plr].Name.Outline = true
+                ESP_Objects[plr].Name.Color = ESP_Settings.Color
+            end
+            ESP_Objects[plr].Name.Text = plr.Name .. " [" .. math.floor(dist) .. "m]"
+            ESP_Objects[plr].Name.Position = Vector2.new(screenPos.X, screenPos.Y - 30)
+            ESP_Objects[plr].Name.Visible = onScreen
+        elseif ESP_Objects[plr].Name then
+            ESP_Objects[plr].Name.Visible = false
+        end
+
+        if ESP_Settings.ShowBoxes then
+            if not ESP_Objects[plr].Box then
+                ESP_Objects[plr].Box = Drawing.new("Square")
+                ESP_Objects[plr].Box.Thickness = 1
+                ESP_Objects[plr].Box.Filled = false
+                ESP_Objects[plr].Box.Color = ESP_Settings.Color
+            end
+            local size = 5000 / dist
+            ESP_Objects[plr].Box.Size = Vector2.new(size, size * 1.5)
+            ESP_Objects[plr].Box.Position = Vector2.new(screenPos.X - size/2, screenPos.Y - size/2)
+            ESP_Objects[plr].Box.Visible = onScreen
+        elseif ESP_Objects[plr].Box then
+            ESP_Objects[plr].Box.Visible = false
+        end
+
+        if ESP_Settings.ShowTracers then
+            if not ESP_Objects[plr].Tracer then
+                ESP_Objects[plr].Tracer = Drawing.new("Line")
+                ESP_Objects[plr].Tracer.Thickness = 1
+                ESP_Objects[plr].Tracer.Color = ESP_Settings.Color
+            end
+            ESP_Objects[plr].Tracer.From = Vector2.new(Camera.ViewportSize.X / 2, Camera.ViewportSize.Y)
+            ESP_Objects[plr].Tracer.To = Vector2.new(screenPos.X, screenPos.Y)
+            ESP_Objects[plr].Tracer.Visible = onScreen
+        elseif ESP_Objects[plr].Tracer then
+            ESP_Objects[plr].Tracer.Visible = false
+        end
+    end
+end
+
+local function ToggleESP(state)
+    ESP_Settings.Enabled = state
+    if state then
+        if not ESP_Connection then
+            ESP_Connection = RunService.RenderStepped:Connect(UpdateESP)
+            track(ESP_Connection)
+        end
+    else
+        if ESP_Connection then ESP_Connection:Disconnect(); ESP_Connection = nil end
+        UpdateESP()
+    end
+end
+
+track(Players.PlayerRemoving:Connect(function(plr)
+    if ESP_Objects[plr] then
+        if ESP_Objects[plr].Box then ESP_Objects[plr].Box:Remove() end
+        if ESP_Objects[plr].Name then ESP_Objects[plr].Name:Remove() end
+        if ESP_Objects[plr].Tracer then ESP_Objects[plr].Tracer:Remove() end
+        ESP_Objects[plr] = nil
+    end
+end))
+
+-- UI для ESP
+makeToggle(featContent, "👁️ ESP (Включить/Выключить)", false, function(state) ToggleESP(state) end)
+makeToggle(featContent, "🏷️ ESP: Показывать Имена", true, function(state) ESP_Settings.ShowNames = state end)
+makeToggle(featContent, "📦 ESP: Показывать Боксы", true, function(state) ESP_Settings.ShowBoxes = state end)
+makeToggle(featContent, "📏 ESP: Показывать Линии (Tracers)", true, function(state) ESP_Settings.ShowTracers = state end)
 
 makeToggle(featContent, "🛡️ Godmode (9e9 HP)", false, function(state)
     local hum = getHumanoid(LocalPlayer)
     if not hum then return end
-    if state then
-        hum.MaxHealth = 9e9
-        hum.Health = 9e9
-    else
-        hum.MaxHealth = 100
-        hum.Health = math.min(hum.Health, 100)
-    end
+    if state then hum.MaxHealth = 9e9; hum.Health = 9e9
+    else hum.MaxHealth = 100; hum.Health = math.min(hum.Health, 100) end
 end)
 
--- Modern Fly (LinearVelocity)
-local flyState = false
-local flyLV, flyAO
+local flyState, flyLV, flyAO = false, nil, nil
 makeToggle(featContent, "🕊️ Fly (WASD + Space/Ctrl)", false, function(state)
     flyState = state
     local char = LocalPlayer.Character
@@ -422,12 +536,10 @@ makeToggle(featContent, "🕊️ Fly (WASD + Space/Ctrl)", false, function(state
         flyLV.MaxForce = 1e6
         flyLV.VelocityConstraintMode = Enum.VelocityConstraintMode.Vector
         flyLV.Parent = hrp
-        
         flyAO = Instance.new("AlignOrientation")
         flyAO.Attachment0 = hrp.RootAttachment
         flyAO.MaxTorque = 1e6
         flyAO.Parent = hrp
-        
         notify("Fly", "Активирован")
     else
         hum.PlatformStand = false
@@ -450,23 +562,12 @@ track(RunService.RenderStepped:Connect(function()
     flyLV.VectorVelocity = move * 60
 end))
 
-makeButton(featContent, "👊 Оттолкнуть выбранного (Slap)", function()
-    if not selectedPlayer then return notify("Ошибка", "Выберите игрока") end
-    local root = getRoot(selectedPlayer)
-    if root then
-        -- Работает только если у нас есть сетевые права (редко), но оставим как есть для совместимости
-        root.AssemblyLinearVelocity = Vector3.new(0, 80, 0) + (root.CFrame.LookVector * 40)
-        notify("Slap", "Выполнено")
-    end
-end)
-
 makeToggle(featContent, "🚫 Anti-AFK (Умный)", false, function(state)
     if state then
         local afkConn = LocalPlayer.Idled:Connect(function()
             local vu = game:GetService("VirtualUser")
             vu:CaptureController()
             vu:ClickButton2(Vector2.new())
-            -- Микро-движение камеры для обхода строгих античитов
             Camera.CFrame *= CFrame.Angles(0, math.rad(math.random(-3, 3)), 0)
         end)
         track(afkConn)
@@ -475,7 +576,6 @@ end)
 
 -- ============ 4. ВКЛАДКА: ПРОФИЛЬ ============
 local profContent = tabContents["ПРОФИЛЬ"]
-
 local function makeProfileStat(label, value)
     local f = Instance.new("Frame")
     f.Size = UDim2.new(1, -16, 0, 40)
@@ -512,22 +612,17 @@ makeProfileStat("🏷️ Display Name", LocalPlayer.DisplayName)
 makeProfileStat("🆔 User ID", LocalPlayer.UserId)
 makeProfileStat("🎂 Возраст аккаунта", LocalPlayer.AccountAge .. " дн.")
 
--- Попытка получить дату создания через API (если HttpService разрешен)
 task.spawn(function()
-    local ok, res = pcall(function()
-        return HttpService:JSONDecode(game:HttpGet("https://users.roblox.com/v1/users/" .. LocalPlayer.UserId))
-    end)
+    local ok, res = pcall(function() return HttpService:JSONDecode(game:HttpGet("https://users.roblox.com/v1/users/" .. LocalPlayer.UserId)) end)
     if ok and res and res.created then
-        local date = string.sub(res.created, 1, 10)
-        makeProfileStat("📅 Дата регистрации", date)
+        makeProfileStat("📅 Дата регистрации", string.sub(res.created, 1, 10))
     else
         makeProfileStat("📅 Дата регистрации", "Недоступно")
     end
 end)
 
 makeButton(profContent, "📋 Скопировать все данные", function()
-    local data = string.format("Name: %s\nDisplay: %s\nID: %d\nAge: %d days", LocalPlayer.Name, LocalPlayer.DisplayName, LocalPlayer.UserId, LocalPlayer.AccountAge)
-    copyText(data)
+    copyText(string.format("Name: %s\nDisplay: %s\nID: %d\nAge: %d days", LocalPlayer.Name, LocalPlayer.DisplayName, LocalPlayer.UserId, LocalPlayer.AccountAge))
 end)
 
 -- ============ 5. ВКЛАДКА: НАСТРОЙКИ ============
@@ -560,4 +655,4 @@ track(UserInputService.InputBegan:Connect(function(input, gp)
     end
 end))
 
-notify("Nur Hub v10.0", "Загружен! Нажми K для скрытия")
+notify("Nur Hub v10.1", "Загружен! Нажми K для скрытия")
